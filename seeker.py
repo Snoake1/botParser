@@ -17,7 +17,25 @@ def get_driver():
 
     return driver
 
-def parse(url, driver):
+
+def find_cheaper_products(url: str) -> dict:
+
+    display = Display(visible=True, size=(800, 600)) # to comment for windows
+    display.start() # to comment for windows
+
+    driver  = get_driver()
+    product = parse(url, driver)
+    if product == "Нельзя парсить эту страницу":
+        return product
+    ret_ozon = get_pages_ozon(product, driver)
+    ret_wb = get_pages_wb(product, driver)
+
+    driver.quit()
+    display.stop() # to comment for windows
+    return ret_ozon | ret_wb
+
+
+def parse(url, driver) -> Product:
     if "ozon" in url:
         return parse_page_ozon(url, driver)
 
@@ -120,7 +138,7 @@ def parse_page_wildberries(url: str, driver) -> Product:
     return Product(name, price, brand=brand, specifications=specifications, url=url)
 
 
-def get_pages_ozon(product, driver):
+def get_pages_ozon(product, driver) -> dict:
 
     name = product.name.replace(" ", "+")
     driver.get(url="https://www.ozon.ru/search/?from_global=true&sorting=price&text="+name)
@@ -128,6 +146,10 @@ def get_pages_ozon(product, driver):
     time.sleep(1.0)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
+
+    if soup.find(string="Доступ ограничен") is not None:
+        driver.refresh()
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
 
     tiles = soup.find_all('div', class_=re.compile(".*sj7_23.*"))
 
@@ -141,32 +163,33 @@ def get_pages_ozon(product, driver):
     return pages_with_price
 
 
-def get_pages_wildberries(product, driver):
+def get_pages_wb(product, driver) -> dict:
     name = product.name.replace(" ", "+")
     
     driver.get(url="https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search="+name)
-    time.sleep(1.0)
+    time.sleep(5.0)
 
     soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-    tiles = soup.find_all('a', class_=re.compile(".*product-card__wrapper*"))
+    tiles = soup.find_all('div', class_=re.compile(".*product-card__wrapper*"))
 
     pages_with_price = {}
-    for tile in tiles:
+    for tile in tiles[:10]:
         link = tile.find('a')
         link = link['href']
         price = tile.find('ins', class_=re.compile(".*price__lower-price.*")).text
-        pages_with_price["https://www.ozon.ru" + link] = price.replace("\u2009", "")
+        pages_with_price[link] = price.replace("\xa0", "")
 
-    return
+    return pages_with_price
 
 if __name__ == '__main__':
+    pass
     
-    start = time.time()
+    # start = time.time()
 
-    display = Display(visible=True, size=(800, 600)) # to comment for windows
-    display.start() # to comment for windows
-    driver = get_driver()
+    # display = Display(visible=True, size=(800, 600)) # to comment for windows
+    # display.start() # to comment for windows
+    # driver = get_driver()
 
     # print(parse('https://www.ozon.ru/product/krossovki-moocie-1611940316/?advert=APMATHIne-yv7EMEHEjc5lcF5h4n_2NevDf5k0FNlcbvYR9fuFtweySm0y4G-RiMJC1Ro0tPIYXHCT1u2nDcjhVj5jGWk9exEOZWEjcCBP3_DDfuPjO2hcC0sIUj5HHQk7VNlBwar8SZ45_YwWXlIdfCYkzqn1VhXFVy&avtc=1&avte=4&avts=1731837984', driver).__str__())
     # print(parse('https://www.ozon.ru/product/krossovki-moocie-1611940316/?advert=APMATHIne-yv7EMEHEjc5lcF5h4n_2NevDf5k0FNlcbvYR9fuFtweySm0y4G-RiMJC1Ro0tPIYXHCT1u2nDcjhVj5jGWk9exEOZWEjcCBP3_DDfuPjO2hcC0sIUj5HHQk7VNlBwar8SZ45_YwWXlIdfCYkzqn1VhXFVy&avtc=1&avte=4&avts=1731837984', driver).__str__())
@@ -178,11 +201,13 @@ if __name__ == '__main__':
     # print(prod.__str__())
     # print(get_pages_ozon(prod, driver).__str__())
 
-    prod = parse("https://www.wildberries.ru/catalog/8352731/detail.aspx", driver)
-    print(prod.__str__())
-    print(get_pages_wildberries(prod, driver).__str__())
+
+    # print(find_cheaper_products("https://www.wildberries.ru/catalog/8352731/detail.aspx"))
+    # prod = parse("https://www.wildberries.ru/catalog/8352731/detail.aspx", driver)
+    # print(prod.__str__())
+    # print(get_pages_wb(prod, driver).__str__())
 
 
-    driver.quit()
-    display.stop() # to comment for windows
-    print(time.time() - start)
+    # driver.quit()
+    # display.stop() # to comment for windows
+    # print(time.time() - start)

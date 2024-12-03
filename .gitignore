@@ -2,4 +2,5 @@ venv
 *.png
 .idea
 *.txt
-__pycache__
+*__pycache__
+.env
