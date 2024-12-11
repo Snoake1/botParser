@@ -8,8 +8,6 @@ import time
 from product import Product
 
 
-
-
 def get_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
@@ -18,32 +16,40 @@ def get_driver():
     return driver
 
 
-def find_cheaper_products(url: str) -> dict:
+def find_cheaper_products(url: str, cost_range: str, exact_match: bool) -> dict | str:
 
     display = Display(visible=True, size=(800, 600)) # to comment for windows
     display.start() # to comment for windows
 
     driver  = get_driver()
     product = parse(url, driver)
-    if product == "Нельзя парсить эту страницу":
+
+    if type(product) is str:
         return product
-    ret_ozon = get_pages_ozon(product, driver)
-    ret_wb = get_pages_wb(product, driver)
+    
+    ret_ozon = get_pages_ozon(product, driver, cost_range, exact_match)
+    ret_wb = get_pages_wb(product, driver, cost_range, exact_match)
+    
 
     driver.quit()
     display.stop() # to comment for windows
-    return ret_ozon | ret_wb
+    
+    ret_dict = ret_ozon | ret_wb
+    
+    ret_dict = dict(sorted(ret_dict.items(), key=lambda x: int(x[1][:-1])))
+      
+    return ret_dict if ret_dict != {} else "Товар не найден"
 
 
-def parse(url, driver) -> Product:
-    if "ozon" in url:
+def parse(url, driver) -> Product | str: 
+    if re.search(r".*ozon.ru.*", url):
         return parse_page_ozon(url, driver)
 
-    elif "wildberries" in url:
+    elif re.search(r".*wildberries.*detail.*", url):
         return parse_page_wildberries(url, driver)
 
     else:
-        return "Нельзя парсить эту страницу"
+        return "Страницу не удалось распознать"
 
 
 def parse_page_ozon(url: str, driver) -> Product:
@@ -52,14 +58,14 @@ def parse_page_ozon(url: str, driver) -> Product:
 
     soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-    if soup.find(text="Доступ ограничен") is not None:
+    if soup.find(string="Доступ ограничен") is not None:
         driver.refresh()
         soup = BeautifulSoup(driver.page_source, 'html.parser')
 
     name = soup.find('h1', class_=re.compile(".*tsHeadline550Medium"))
     if name is None:
         name = "Название отсутствует"
-        return
+        return None
     else:
         name = name.text
         name = name.replace("\n", "")
@@ -109,6 +115,7 @@ def parse_page_wildberries(url: str, driver) -> Product:
     name = soup.find('h1', class_=re.compile(".*product-page__title.*"))
     if name is None:
         name = "Название отсутствует"
+        return  None
     else:
         name = name.text
 
@@ -138,10 +145,19 @@ def parse_page_wildberries(url: str, driver) -> Product:
     return Product(name, price, brand=brand, specifications=specifications, url=url)
 
 
-def get_pages_ozon(product, driver) -> dict:
+def get_pages_ozon(product, driver, cost_range: str, exact_match: bool) -> dict:
 
-    name = product.name.replace(" ", "+")
-    driver.get(url="https://www.ozon.ru/search/?from_global=true&sorting=price&text="+name)
+    if not exact_match:
+        name = product.get_cleared_name()  
+    else:  
+        name = product.name
+    
+    if cost_range == "Не установлен":
+        formatted_range = ""
+    else:
+        borders = cost_range.split()
+        formatted_range = f"currency_price={borders[0]}.000%3B{borders[1]}.000&"
+    driver.get(url=f"https://www.ozon.ru/search/?{formatted_range}from_global=true&sorting=score&text="+name.replace(" ", "+"))
 
     time.sleep(1.0)
 
@@ -151,7 +167,7 @@ def get_pages_ozon(product, driver) -> dict:
         driver.refresh()
         soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-    tiles = soup.find_all('div', class_=re.compile(".*sj7_23.*"))
+    tiles = soup.find_all('div', class_=re.compile(".*tile-root.*"))
 
     pages_with_price = {}
     for tile in tiles:
@@ -163,10 +179,22 @@ def get_pages_ozon(product, driver) -> dict:
     return pages_with_price
 
 
-def get_pages_wb(product, driver) -> dict:
-    name = product.name.replace(" ", "+")
+def get_pages_wb(product, driver, cost_range, exact_match) -> dict:
     
-    driver.get(url="https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search="+name)
+    if not exact_match:
+        name = product.get_cleared_name()
+    else:
+        name = product.name
+    
+    
+    borders = cost_range.split()
+    if cost_range == "Не установлен":
+        formatted_range = ""
+    else:
+        borders = cost_range.split()
+        formatted_range = f"&priceU={borders[0]}00%3B{borders[1]}00"
+    
+    driver.get(url="https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search="+name.replace(" ", "+")+formatted_range)
     time.sleep(5.0)
 
     soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -197,12 +225,27 @@ if __name__ == '__main__':
     # print(parse("https://www.wildberries.ru/catalog/8352731/detail.aspx", driver).__str__())
     # print(parse("https://www.wildberries.ru/catalog/198244792/detail.aspx", driver).__str__())
 
+    # Тесты...
+    # print(parse_page_ozon("https://www.ozon.ru", driver))
+    # print(parse_page_ozon("https://web.telegram.org/", driver))
+    # print(parse_page_wildberries("https://www.wildberries.ru", driver))
+    # print(parse_page_wildberries("https://web.telegram.org/", driver))
+
+    # print(get_pages_ozon(Product("", "123"), driver))
+    # print(get_pages_ozon(Product(), driver))
+    # print(get_pages_wb(Product("", "12321"), driver))
+    # print(get_pages_wb(Product(), driver))
+
+    # print(parse("https://www.ozon.ru/products/", driver))
+    #...Тесты
+
     # prod = parse('https://www.ozon.ru/product/xiaomi-smartfon-xiaomi-13t-rostest-eac-12-256-gb-siniy-1196411082/?asb=Ok83xkgiCzoY%252FY%252FjiVEivt%252BBvp90WMATlqvJynJ%252FNUs%253D&asb2=NNaZkI_jcBDQwRfmhd4x-oJleJGX5oyHHf7kNFRmyJpEtzQl7SHtfvlBwY4nKeUxH211z5LWbKYTWYFXxhIj0g&avtc=1&avte=4&avts=1733047697&keywords=xiaomi+13t', driver)
     # print(prod.__str__())
     # print(get_pages_ozon(prod, driver).__str__())
 
 
-    # print(find_cheaper_products("https://www.wildberries.ru/catalog/8352731/detail.aspx"))
+    # print(find_cheaper_products("https://www.wildberries.ru"))
+    # print(find_cheaper_products("https://app.diagrams.net/#G1Y3GQGp9Sttr7qhMw9L8BgjVk0TjJ2l6V#%7B%22pageId%22%3A%226n7_M826w-WZFeCSBfO7%22%7D"))
     # prod = parse("https://www.wildberries.ru/catalog/8352731/detail.aspx", driver)
     # print(prod.__str__())
     # print(get_pages_wb(prod, driver).__str__())
@@ -211,3 +254,7 @@ if __name__ == '__main__':
     # driver.quit()
     # display.stop() # to comment for windows
     # print(time.time() - start)
+
+
+    prod = Product("xiaomi 13t, красный, зеленая, золотая", "12321")
+    print(prod.get_cleared_name())
