@@ -45,7 +45,7 @@ def parse(url, driver) -> Product | str:
     if re.search(r".*ozon.ru.*", url):
         return parse_page_ozon(url, driver)
 
-    elif re.search(r".*wildberries.*detail.*", url):
+    elif re.search(r".*wildberries.*", url):
         return parse_page_wildberries(url, driver)
 
     else:
@@ -64,7 +64,6 @@ def parse_page_ozon(url: str, driver) -> Product:
 
     name = soup.find('h1', class_=re.compile(".*tsHeadline550Medium"))
     if name is None:
-        name = "Название отсутствует"
         return None
     else:
         name = name.text
@@ -72,7 +71,6 @@ def parse_page_ozon(url: str, driver) -> Product:
         name = name.replace("  ", "")
 
     specifications = soup.find_all('span', class_="tsBodyM")
-    # print(specifications)
     values = soup.find_all('span', class_=re.compile(".*tsBody400Small"), style="color:rgba(7, 7, 7, 1);")
     new_values = []
     for value in values:
@@ -81,8 +79,6 @@ def parse_page_ozon(url: str, driver) -> Product:
             continue
         if value.parent.text not in new_values:
             new_values.append(value.parent.text)
-    # print(values)
-    # print(new_values)
 
     brand = soup.find('a', class_="tsCompactControl500Medium")
     if brand is None:
@@ -114,16 +110,21 @@ def parse_page_wildberries(url: str, driver) -> Product:
 
     name = soup.find('h1', class_=re.compile(".*product-page__title.*"))
     if name is None:
-        name = "Название отсутствует"
         return  None
     else:
         name = name.text
 
     price = soup.find('ins', class_=re.compile(".*price-block__final-price.*"))
     if price is None:
-        price = "Цена отсутствует"
+        return None
     else:
-        price = price.text
+        price = price.text.replace("\xa0", "")
+    
+    price_with_card = soup.find('span', class_=re.compile(".*price-block__wallet-price.*"))
+    if price_with_card is None:
+        price_with_card = "Цена с картой отсутствует"
+    else:
+        price_with_card = price_with_card.text.replace("\xa0", "")
 
     brand = soup.find('a', class_=re.compile(".*product-page__header-brand.*"))
     if brand is None:
@@ -142,7 +143,7 @@ def parse_page_wildberries(url: str, driver) -> Product:
             value = row.find('td').text.strip()
             specifications[key] = value
 
-    return Product(name, price, brand=brand, specifications=specifications, url=url)
+    return Product(name, price, price_with_card=price_with_card, brand=brand, specifications=specifications, url=url)
 
 
 def get_pages_ozon(product, driver, cost_range: str, exact_match: bool) -> dict:
@@ -166,6 +167,9 @@ def get_pages_ozon(product, driver, cost_range: str, exact_match: bool) -> dict:
     if soup.find(string="Доступ ограничен") is not None:
         driver.refresh()
         soup = BeautifulSoup(driver.page_source, 'html.parser')
+    
+    if soup.find('div', class_="aa0g_33") is not None:
+        return {}
 
     tiles = soup.find_all('div', class_=re.compile(".*tile-root.*"))
 
@@ -186,6 +190,8 @@ def get_pages_wb(product, driver, cost_range, exact_match) -> dict:
     else:
         name = product.name
     
+    if name == "":
+        return {}
     
     borders = cost_range.split()
     if cost_range == "Не установлен":
