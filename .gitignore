@@ -4,3 +4,4 @@ venv
 *.txt
 *__pycache__
 .env
+.coverage

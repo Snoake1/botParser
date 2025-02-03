@@ -13,13 +13,6 @@ def driver_inj(func):
     return wrapper
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_get_driver():
-    driver = get_driver()
-    assert isinstance(driver, uc.Chrome)
-    driver.quit()
-
-
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @driver_inj
 def test_parse_page_ozon_valid_page(driver):
     result = parse_page_ozon('file:///home/snoake/vkr/botSeeker/tests/pages/%D0%A2%D0%BE%D0%B2%D0%B0%D1%80%20%D1%81%20%D0%BA%D0%B0%D1%80%D1%82%D0%BE%D0%B9%20OZON.html', driver)

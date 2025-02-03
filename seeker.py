@@ -11,7 +11,7 @@ from product import Product
 def get_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
-    driver = uc.Chrome(options=options, version_main=130)
+    driver = uc.Chrome(options=options, version_main=130, delay=1)
 
     return driver
 
@@ -215,52 +215,3 @@ def get_pages_wb(product, driver, cost_range, exact_match) -> dict:
         pages_with_price[link] = price.replace("\xa0", "")
 
     return pages_with_price
-
-if __name__ == '__main__':
-    pass
-    
-    # start = time.time()
-
-    # display = Display(visible=True, size=(800, 600)) # to comment for windows
-    # display.start() # to comment for windows
-    # driver = get_driver()
-
-    # print(parse('https://www.ozon.ru/product/krossovki-moocie-1611940316/?advert=APMATHIne-yv7EMEHEjc5lcF5h4n_2NevDf5k0FNlcbvYR9fuFtweySm0y4G-RiMJC1Ro0tPIYXHCT1u2nDcjhVj5jGWk9exEOZWEjcCBP3_DDfuPjO2hcC0sIUj5HHQk7VNlBwar8SZ45_YwWXlIdfCYkzqn1VhXFVy&avtc=1&avte=4&avts=1731837984', driver).__str__())
-    # print(parse('https://www.ozon.ru/product/krossovki-moocie-1611940316/?advert=APMATHIne-yv7EMEHEjc5lcF5h4n_2NevDf5k0FNlcbvYR9fuFtweySm0y4G-RiMJC1Ro0tPIYXHCT1u2nDcjhVj5jGWk9exEOZWEjcCBP3_DDfuPjO2hcC0sIUj5HHQk7VNlBwar8SZ45_YwWXlIdfCYkzqn1VhXFVy&avtc=1&avte=4&avts=1731837984', driver).__str__())
-    # print(parse('https://www.ozon.ru/product/nabor-skovorod-polaris-easykeep-3dss-3-predmeta-co-semnoy-ruchkoy-iz-nerzhaveyushchey-stali-1652871074/?campaignId=439', driver).__str__())
-    # print(parse("https://www.wildberries.ru/catalog/8352731/detail.aspx", driver).__str__())
-    # print(parse("https://www.wildberries.ru/catalog/198244792/detail.aspx", driver).__str__())
-
-    # Тесты...
-    # print(parse_page_ozon("https://www.ozon.ru", driver))
-    # print(parse_page_ozon("https://web.telegram.org/", driver))
-    # print(parse_page_wildberries("https://www.wildberries.ru", driver))
-    # print(parse_page_wildberries("https://web.telegram.org/", driver))
-
-    # print(get_pages_ozon(Product("", "123"), driver))
-    # print(get_pages_ozon(Product(), driver))
-    # print(get_pages_wb(Product("", "12321"), driver))
-    # print(get_pages_wb(Product(), driver))
-
-    # print(parse("https://www.ozon.ru/products/", driver))
-    #...Тесты
-
-    # prod = parse('https://www.ozon.ru/product/xiaomi-smartfon-xiaomi-13t-rostest-eac-12-256-gb-siniy-1196411082/?asb=Ok83xkgiCzoY%252FY%252FjiVEivt%252BBvp90WMATlqvJynJ%252FNUs%253D&asb2=NNaZkI_jcBDQwRfmhd4x-oJleJGX5oyHHf7kNFRmyJpEtzQl7SHtfvlBwY4nKeUxH211z5LWbKYTWYFXxhIj0g&avtc=1&avte=4&avts=1733047697&keywords=xiaomi+13t', driver)
-    # print(prod.__str__())
-    # print(get_pages_ozon(prod, driver).__str__())
-
-
-    # print(find_cheaper_products("https://www.wildberries.ru"))
-    # print(find_cheaper_products("https://app.diagrams.net/#G1Y3GQGp9Sttr7qhMw9L8BgjVk0TjJ2l6V#%7B%22pageId%22%3A%226n7_M826w-WZFeCSBfO7%22%7D"))
-    # prod = parse("https://www.wildberries.ru/catalog/8352731/detail.aspx", driver)
-    # print(prod.__str__())
-    # print(get_pages_wb(prod, driver).__str__())
-
-
-    # driver.quit()
-    # display.stop() # to comment for windows
-    # print(time.time() - start)
-
-
-    prod = Product("xiaomi 13t, красный, зеленая, золотая", "12321")
-    print(prod.get_cleared_name())
