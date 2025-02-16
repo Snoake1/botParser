@@ -1,3 +1,4 @@
+import random
 import re
 import time
 import undetected_chromedriver as uc 
@@ -11,14 +12,17 @@ from product import Product
 def get_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
-    driver = uc.Chrome(options=options, version_main=130, delay=1)
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    
+    driver = uc.Chrome(options=options, version_main=133, delay=random.randint(1, 3))
 
     return driver
 
 
 def find_cheaper_products(url: str, cost_range: str, exact_match: bool) -> dict | str:
 
-    display = Display(visible=True, size=(800, 600)) # to comment for windows
+    display = Display(visible=False) # to comment for windows
     display.start() # to comment for windows
 
     driver  = get_driver()
@@ -54,7 +58,7 @@ def parse(url, driver) -> Product | str:
 
 def parse_page_ozon(url: str, driver) -> Product:
     driver.get(url=url)
-    time.sleep(1.0)
+    time.sleep(random.randint(1, 3))
 
     soup = BeautifulSoup(driver.page_source, 'html.parser')
 
