@@ -1,5 +1,6 @@
 import re
 import string
+import json
 
 colors = {"красный", "красная", "красное", "красные",
           "синий", "синяя", "синее", "синие",
@@ -22,7 +23,7 @@ colors = {"красный", "красная", "красное", "красные"
 }
 
 
-class Product():
+class Product:
     def __init__(self, name, price, brand=None, price_with_card=None, specifications=None, url=None):
         self.name = name
         self.price = price
@@ -37,3 +38,11 @@ class Product():
     def get_cleared_name(self):
         cleaned_name = re.sub(r'\b(' + '|'.join(colors) + r')\b', '', self.name, flags=re.IGNORECASE)
         return ' '.join(word.strip(string.punctuation) for word in re.sub(r'\s+', ' ', cleaned_name).strip().split())
+    
+    def to_json(self):
+        return json.dumps(self.__dict__)
+    
+    @staticmethod
+    def from_json(json_str):
+        data = json.loads(json_str)
+        return Product(**data)

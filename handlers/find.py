@@ -4,7 +4,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import re
 
-from seeker import find_cheaper_products
+from prodcr import find_cheaper_products
 
 find_router = Router()
 
