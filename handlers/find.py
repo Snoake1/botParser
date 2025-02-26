@@ -14,8 +14,9 @@ class Find(StatesGroup):
     cost_range = State()
     exact_match = State()
 
-def get_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+
+def get_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅Начать поиск", callback_data="find"),
             InlineKeyboardButton(text="🔍Точность поиска", callback_data="exact_match")
@@ -24,7 +25,6 @@ def get_keyboard():
             InlineKeyboardButton(text="💰Установить диапазон цен", callback_data="cost_range")
         ]
     ])
-    return keyboard
 
 
 
@@ -37,10 +37,11 @@ def is_valid_url(text: str) -> bool:
 
 
 def is_valid_range(text: str) -> bool:
-    borders = text.split()
-    if int(borders[0]) > int(borders[1]):
+    try:
+        borders = text.split()
+        return len(borders) == 2 and int(borders[0]) <= int(borders[1])
+    except (ValueError, IndexError):
         return False
-    return True
 
 
 async def get_url(text: str) -> str:
@@ -49,14 +50,6 @@ async def get_url(text: str) -> str:
     )
     url = url_pattern.search(text).group(0)
     return url
-
-async def get_link_kb(url: str) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="Перейти", url=url, callback_data="goto"),
-        ]
-    ])
-    return keyboard
 
 
 async def get_market(url: str) -> str:
@@ -68,17 +61,23 @@ async def get_market(url: str) -> str:
         return "Неизвестный сайт"
 
 
-async def get_text(exact_match: bool = False, cost_range: str="Не установлен") -> str:
-    borders = cost_range.split()
-    return f"Установленные параметы:\n\n" \
-            f"Точность поиска: {"✅Точное совпадение" if exact_match else "Не точный поиск"}\n\n" \
-            f"Диапозон цен: {borders[0]} {borders[1]}\n\n" \
-            f"Желаете установить дополнительные параметры поиска?"
+async def get_text(exact_match: bool = False, cost_range: str = "Не установлен") -> str:
+    if cost_range == "Не установлен":
+        range_text = "Не установлен"
+    else:
+        borders = cost_range.split()
+        range_text = f"{borders[0]} - {borders[1]}"
+    return (
+        "Установленные параметры:\n\n"
+        f"Точность поиска: {'✅Точное совпадение' if exact_match else '❌Не точный поиск'}\n"
+        f"Диапазон цен: {range_text}\n\n"
+        "Желаете установить дополнительные параметры поиска?"
+    )
 
 
 
 @find_router.message(F.text.func(is_valid_url))
-async def get_finding_params(message: Message, state: FSMContext):
+async def process_url(message: Message, state: FSMContext):
     url = await get_url(message.text)
     await state.clear()
     await state.set_data({
@@ -91,23 +90,23 @@ async def get_finding_params(message: Message, state: FSMContext):
 
 
 @find_router.callback_query(F.data == "cost_range")
-async def get_finding_params(callback: Message, state: FSMContext):
+async def set_cost_range(callback: Message, state: FSMContext):
     await callback.message.delete()
     data = await state.get_data()
     if data.get('url') is None:
-        await callback.message.answer("Введите ссылку на товар")
+        await callback.message.answer("Сначала введите ссылку на товар.")
         return
-    await callback.message.answer("Введите диапазон цен через пробел")
+    await callback.message.answer("Введите диапазон цен через пробел (например, 1000 5000):")
     await state.set_state(Find.cost_range)
     
 
 @find_router.message(F.text, Find.cost_range)
-async def get_finding_params(message: Message, state: FSMContext):
+async def process_cost_range(message: Message, state: FSMContext):
     if not re.match(r"^\d+ \d+$", message.text):
-        await message.answer("Неверный формат диапазона цен. Введите диапазон цен через пробел")
+        await message.answer("Неверный формат. Введите диапазон цен через пробел")
         return
     if not is_valid_range(message.text):
-        await message.answer("Неверный диапазон цен. Введите цены в порядке возрастания")
+        await message.answer("Неверный диапазон. Введите цены в порядке возрастания")
         return
     await state.update_data(cost_range=message.text)
     data = await state.get_data()
@@ -115,61 +114,55 @@ async def get_finding_params(message: Message, state: FSMContext):
 
 
 @find_router.callback_query(F.data == "exact_match")
-async def get_finding_params(callback: Message, state: FSMContext):
+async def set_exact_match(callback: Message, state: FSMContext):
     await callback.message.delete()
-    await state.set_state(Find.exact_match)
-    
     data = await state.get_data()
-    if data.get('url') is None:
-        await callback.message.answer("Введите ссылку на товар")
+    if not data.get('url'):
+        await callback.message.answer("Сначала введите ссылку на товар.")
         return
-    
     buttons = [
         [KeyboardButton(text="✅Точное совпадение"), KeyboardButton(text="❌Не точный поиск")]
     ]
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, keyboard=buttons)
-    
-    await callback.message.answer("Выберите точность поиска", reply_markup=keyboard)
+    await callback.message.answer("Выберите точность поиска:", reply_markup=keyboard)
+    await state.set_state(Find.exact_match)
 
 
 @find_router.message(Find.exact_match)
-async def get_finding_params(message: Message, state: FSMContext):
-    
-    if message.text == "✅Точное совпадение":
+async def process_exact_match(message: Message, state: FSMContext):
+    text = message.text
+    if text == "✅Точное совпадение":
         await state.update_data(exact_match=True)
-    elif message.text == "❌Не точный поиск":
+    elif text == "❌Не точный поиск":
         await state.update_data(exact_match=False)
     else:
-        await message.answer("Воспользутейсь встроенной клавиатурой")
+        await message.answer("Пожалуйста, используйте кнопки на клавиатуре.")
         return
-    await message.answer("Точность установлена", reply_markup=ReplyKeyboardRemove())
-    
     data = await state.get_data()
-    await message.answer(await get_text(data.get('exact_match'), data.get('cost_range')), reply_markup=get_keyboard())
-
+    await message.answer("Точность установлена.", reply_markup=ReplyKeyboardRemove())
+    await message.answer(await get_text(data['exact_match'], data['cost_range']), reply_markup=get_keyboard())
 
 @find_router.callback_query(F.data == "find")
 async def get_finding_params(callback: Message, state: FSMContext):
     data = await state.get_data()
     url = data.get('url')
     
-    if url is None:
-        await callback.message.answer("Введите ссылку на товар")
+    if not url:
+        await callback.message.answer("Сначала введите ссылку на товар.")
         return
     await callback.message.delete()
-    await callback.message.answer("Начинаю поиск. Это может занять некоторое время...")
-    await state.clear()
-    result = find_cheaper_products(url, data.get('cost_range'), data.get('exact_match'))
-    if type(result) == str:
-        await callback.message.answer(result)
-        return 
+    wait_msg = await callback.message.answer("Начинаю поиск. Это может занять некоторое время...")
     
-    for item in result.items():
-        await callback.message.answer(f"Цена: {item[1]}\nМаркетплейс: {await get_market(item[0])}", reply_markup= await get_link_kb(item[0]))
-
-
-@find_router.callback_query(F.data == "goto")
-async def get_finding_params(callback: Message, state: FSMContext):
+    result = await find_cheaper_products(url, data.get('cost_range'), data.get('exact_match'))
+    
+    await wait_msg.delete()
+    
+    if isinstance(result, str):
+        await callback.message.answer(result)
+    else:
+        for link, price in result.items():
+            market = await get_market(link)
+            await callback.message.answer(
+                f"Цена: {price}\nМаркетплейс: {market}"
+            )
     await state.clear()
-    url = callback.message.reply_markup.inline_keyboard[0][0].url
-    await callback.message.answer(f"вы выбрали эту ссылку:{url}")

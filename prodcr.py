@@ -1,177 +1,178 @@
-import pika
+import aio_pika
 import uuid
 import json
-from  product import Product
-from data import Data
+import asyncio
+from typing import Dict, Union
+from product import Product  # Предполагаемый класс
+from data import Data  # Предполагаемый класс
 
+async def rabbitmq_connection():
+    """Создание асинхронного подключения к RabbitMQ."""
+    return await aio_pika.connect_robust("amqp://guest:guest@localhost/")
 
-class FindRpcClient(object):
+class AsyncFindRpcClient:
     _instance = None
+
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
 
-    def __init__(self):
-        self.connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host='localhost'))
+    async def setup(self):
+        """Настройка соединения и очередей."""
+        self.connection = await rabbitmq_connection()
+        self.channel = await self.connection.channel()
+        self.callback_queue = await self.channel.declare_queue(exclusive=True)
+        self.responses = {}
+        # Используем очередь для потребления сообщений
+        await self.callback_queue.consume(self.on_response)
 
-        self.channel = self.connection.channel()
+    async def on_response(self, message: aio_pika.IncomingMessage):
+        """Обработка ответа от RabbitMQ."""
+        async with message.process():
+            correlation_id = message.correlation_id
+            self.responses[correlation_id] = message.body
 
-        result = self.channel.queue_declare(queue='find_queue')
-        self.callback_queue = result.method.queue
+    async def call(self, url: str) -> bytes:
+        """Асинхронный RPC-вызов."""
+        if not hasattr(self, 'channel'):
+            await self.setup()
 
-        self.channel.basic_consume(
-            queue=self.callback_queue,
-            on_message_callback=self.on_response,
-            )
+        correlation_id = str(uuid.uuid4())
+        self.responses[correlation_id] = None
 
-        self.response = None
-        self.corr_id = None
-
-    def on_response(self, ch, method, props, body):
-        if self.corr_id == props.correlation_id:
-            self.response = body
-            self.channel.basic_ack(delivery_tag=method.delivery_tag)
-
-    def call(self, url):
-        self.response = None
-        self.corr_id = str(uuid.uuid4())
-        self.channel.basic_publish(
-            exchange='',
-            routing_key='find_answer',
-            properties=pika.BasicProperties(
-                reply_to=self.callback_queue,
-                correlation_id=self.corr_id,
+        await self.channel.default_exchange.publish(
+            aio_pika.Message(
+                body=url.encode(),
+                correlation_id=correlation_id,
+                reply_to=self.callback_queue.name
             ),
-            body=url)
-        while self.response is None:
-            self.connection.process_data_events(time_limit=None)
-        return self.response
-    
-class OzonRpcClient(object):
+            routing_key="find_answer"
+        )
+
+        # Ожидание ответа
+        while self.responses[correlation_id] is None:
+            await asyncio.sleep(0.1)
+        response = self.responses.pop(correlation_id)
+        return response
+
+class AsyncOzonRpcClient:
     _instance = None
+
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
-    
-    def __init__(self):
-        self.connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host='localhost'))
 
-        self.channel = self.connection.channel()
+    async def setup(self):
+        self.connection = await rabbitmq_connection()
+        self.channel = await self.connection.channel()
+        self.callback_queue = await self.channel.declare_queue(exclusive=True)
+        self.responses = {}
+        await self.callback_queue.consume(self.on_response)
 
-        result = self.channel.queue_declare(queue='ozon_queue')
-        self.callback_queue = result.method.queue
+    async def on_response(self, message: aio_pika.IncomingMessage):
+        async with message.process():
+            correlation_id = message.correlation_id
+            self.responses[correlation_id] = message.body
 
-        self.channel.basic_consume(
-            queue=self.callback_queue,
-            on_message_callback=self.on_response,
-            #auto_ack=True
-            )
+    async def call(self, data: str) -> bytes:
+        if not hasattr(self, 'channel'):
+            await self.setup()
 
-        self.response = None
-        self.corr_id = None
+        correlation_id = str(uuid.uuid4())
+        self.responses[correlation_id] = None
 
-    def on_response(self, ch, method, props, body):
-        if self.corr_id == props.correlation_id:
-            self.response = body
-            self.channel.basic_ack(delivery_tag=method.delivery_tag)
-
-    def call(self, data):
-        self.response = None
-        self.corr_id = str(uuid.uuid4())
-        self.channel.basic_publish(
-            exchange='',
-            routing_key='ozon_answer',
-            properties=pika.BasicProperties(
-                reply_to=self.callback_queue,
-                correlation_id=self.corr_id,
+        await self.channel.default_exchange.publish(
+            aio_pika.Message(
+                body=data.encode(),
+                correlation_id=correlation_id,
+                reply_to=self.callback_queue.name
             ),
-            body=data)
-        while self.response is None:
-            self.connection.process_data_events(time_limit=None)
-        return self.response
-    
+            routing_key="ozon_answer"
+        )
 
-class WbRpcClient(object):
+        while self.responses[correlation_id] is None:
+            await asyncio.sleep(0.1)
+        response = self.responses.pop(correlation_id)
+        return response
+
+class AsyncWbRpcClient:
     _instance = None
+
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
-    
-    def __init__(self):
-        self.connection = pika.BlockingConnection(
-            pika.ConnectionParameters(host='localhost'))
 
-        self.channel = self.connection.channel()
+    async def setup(self):
+        self.connection = await rabbitmq_connection()
+        self.channel = await self.connection.channel()
+        self.callback_queue = await self.channel.declare_queue(exclusive=True)
+        self.responses = {}
+        await self.callback_queue.consume(self.on_response)
 
-        result = self.channel.queue_declare(queue='wb_queue')
-        self.callback_queue = result.method.queue
+    async def on_response(self, message: aio_pika.IncomingMessage):
+        async with message.process():
+            correlation_id = message.correlation_id
+            self.responses[correlation_id] = message.body
 
-        self.channel.basic_consume(
-            queue=self.callback_queue,
-            on_message_callback=self.on_response,
-            #auto_ack=True
-            )
+    async def call(self, data: str) -> bytes:
+        if not hasattr(self, 'channel'):
+            await self.setup()
 
-        self.response = None
-        self.corr_id = None
+        correlation_id = str(uuid.uuid4())
+        self.responses[correlation_id] = None
 
-    def on_response(self, ch, method, props, body):
-        if self.corr_id == props.correlation_id:
-            self.response = body
-            self.channel.basic_ack(delivery_tag=method.delivery_tag)
-
-    def call(self, data):
-        self.response = None
-        self.corr_id = str(uuid.uuid4())
-        self.channel.basic_publish(
-            exchange='',
-            routing_key='wb_answer',
-            properties=pika.BasicProperties(
-                reply_to=self.callback_queue,
-                correlation_id=self.corr_id,
+        await self.channel.default_exchange.publish(
+            aio_pika.Message(
+                body=data.encode(),
+                correlation_id=correlation_id,
+                reply_to=self.callback_queue.name
             ),
-            body=data)
-        while self.response is None:
-            self.connection.process_data_events(time_limit=None)
-        return self.response
-        
+            routing_key="wb_answer"
+        )
 
-def find_cheaper_products(url: str, cost_range: str, exact_match: bool) -> dict | str:
-    
-    find_rpc = FindRpcClient()
-    ozon_rpc = OzonRpcClient()
-    wb_rpc = WbRpcClient()
-    
+        while self.responses[correlation_id] is None:
+            await asyncio.sleep(0.1)
+        response = self.responses.pop(correlation_id)
+        return response
+
+async def find_cheaper_products(url: str, cost_range: str, exact_match: bool) -> Union[Dict[str, str], str]:
+    """Асинхронная функция поиска более дешевых товаров."""
+    find_rpc = AsyncFindRpcClient()
+    ozon_rpc = AsyncOzonRpcClient()
+    wb_rpc = AsyncWbRpcClient()
+
     print(f" [x] Requesting {url};\n {cost_range};\n {exact_match};\n")
-    response = find_rpc.call(url).decode()
-    product = Product.from_json(response)
+    response = await find_rpc.call(url)
+    product = Product.from_json(response.decode())
     print(f" [.] Got {product}")
 
     data = Data(product, cost_range, exact_match)
-    print(f" [.] Got {product}")
-    if type(product) is Product:
-        ozon_response = ozon_rpc.call(data.to_json())
-        print(f" [.] Got ozon {ozon_response}\n\n")
-        wb_response = wb_rpc.call(data.to_json())
-        print(f" [.] Got wb {wb_response}\n\n")
+    print(f" [.] Data prepared: {data}")
+
+    if isinstance(product, Product):
+        ozon_task = ozon_rpc.call(data.to_json())
+        # await asyncio.sleep(1)
+        wb_task = wb_rpc.call(data.to_json())
+        ozon_response, wb_response = await asyncio.gather(ozon_task, wb_task)
         
-    ret_dict = json.loads(ozon_response) | json.loads(wb_response)
-    ret_dict = dict(sorted(ret_dict.items(), key=lambda x: int(x[1][:-1])))
-      
-    return ret_dict if ret_dict != {} else "Товар не найден"
+        print(f" [.] Got ozon {ozon_response}")
+        print(f" [.] Got wb {wb_response}")
 
+        ret_dict = json.loads(ozon_response) | json.loads(wb_response)
+        ret_dict = dict(sorted(ret_dict.items(), key=lambda x: int(x[1][:-1])))
+        return ret_dict if ret_dict else "Товар не найден"
+    return "Ошибка при получении данных о товаре"
 
-def main():
-    print(find_cheaper_products("https://www.ozon.ru/product/nabor-nozhey-kuhonnyh-samura-golf-sg-0240-nabor-ih-4-h-nozhey-1576657502/?campaignId=527", "1000 3000", True))
+async def main():
+    result = await find_cheaper_products(
+        "https://www.ozon.ru/product/nabor-nozhey-kuhonnyh-samura-golf-sg-0240-nabor-ih-4-h-nozhey-1576657502/?campaignId=527",
+        "1000 3000",
+        True
+    )
+    print(result)
 
-   
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
