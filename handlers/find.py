@@ -4,11 +4,12 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import re
 
+from .start import Mode, track_keyboard, default_keyboard
 from prodcr import find_cheaper_products
 
 find_router = Router()
 
-
+valid_names = ("ozon.ru", "wildberries.ru")
 
 class Find(StatesGroup):
     cost_range = State()
@@ -33,8 +34,10 @@ def is_valid_url(text: str) -> bool:
         r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     )
     finded_string = url_pattern.search(text)
-    return bool(finded_string)
-
+    if not bool(finded_string):
+        return False
+    
+    return any(name in text for name in valid_names)
 
 def is_valid_range(text: str) -> bool:
     try:
@@ -73,10 +76,9 @@ async def get_text(exact_match: bool = False, cost_range: str = "Не устан
         f"Диапазон цен: {range_text}\n\n"
         "Желаете установить дополнительные параметры поиска?"
     )
+    
 
-
-
-@find_router.message(F.text.func(is_valid_url))
+@find_router.message(F.text.func(is_valid_url), Mode.find_mode)
 async def process_url(message: Message, state: FSMContext):
     url = await get_url(message.text)
     await state.clear()
@@ -87,6 +89,21 @@ async def process_url(message: Message, state: FSMContext):
     })
     
     await message.answer(await get_text(), reply_markup=get_keyboard())
+
+
+@find_router.message(F.text == "Отслеживаемые товары", Mode.find_mode)
+async def process_change_mode(message: Message, state: FSMContext):
+    await message.answer("Вы можете отслеживать изменения цен на добавленные товары.", reply_markup=track_keyboard)
+    await state.set_state(Mode.track_mode)
+
+
+
+@find_router.message(Mode.find_mode)
+async def process_text(message: Message, state: FSMContext):
+    await message.answer(f'Не могу перейти по ссылке.\n\n'
+                         f'Отправь ссылку на товар, и я постараюсь найти аналоги дешевле✨\n\n'
+                         f'Доступные сайты:\n'
+                         f'{"\n".join(valid_names)}')
 
 
 @find_router.callback_query(F.data == "cost_range")
@@ -163,6 +180,8 @@ async def get_finding_params(callback: Message, state: FSMContext):
         for link, price in result.items():
             market = await get_market(link)
             await callback.message.answer(
-                f"Цена: {price}\nМаркетплейс: {market}"
-            )
+                f"Цена: {price}\nМаркетплейс: {market}\n{link}"
+            ,)
     await state.clear()
+    await callback.answer(reply_markup=default_keyboard)
+    
