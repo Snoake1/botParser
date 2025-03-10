@@ -3,12 +3,9 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from decouple import config
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from decouple import config
 
-# from db_handler.db_class import PostgresHandler
-
-# pg_db = PostgresHandler(config('PG_LINK'))
 scheduler = AsyncIOScheduler(timezone='Europe/Moscow')
 admins = [int(admin_id) for admin_id in config('ADMINS').split(',')]
 

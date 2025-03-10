@@ -159,6 +159,7 @@ async def process_exact_match(message: Message, state: FSMContext):
     await message.answer("Точность установлена.", reply_markup=ReplyKeyboardRemove())
     await message.answer(await get_text(data['exact_match'], data['cost_range']), reply_markup=get_keyboard())
 
+
 @find_router.callback_query(F.data == "find")
 async def get_finding_params(callback: Message, state: FSMContext):
     data = await state.get_data()

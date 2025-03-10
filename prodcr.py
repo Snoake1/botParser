@@ -166,6 +166,13 @@ async def find_cheaper_products(url: str, cost_range: str, exact_match: bool) ->
         return ret_dict if ret_dict else "Товар не найден"
     return "Ошибка при получении данных о товаре"
 
+async def get_prod(url):
+    find_rpc = AsyncFindRpcClient()
+    print(f" [x] Requesting just parse: {url};\n")
+    response = await find_rpc.call(url)
+    product = Product.from_json(response.decode())
+    return product
+
 async def main():
     result = await find_cheaper_products(
         "https://www.ozon.ru/product/nabor-nozhey-kuhonnyh-samura-golf-sg-0240-nabor-ih-4-h-nozhey-1576657502/?campaignId=527",

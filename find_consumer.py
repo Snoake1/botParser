@@ -11,6 +11,8 @@ from product import Product
 import pika
 
 
+#TODO clean up
+
 def get_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
@@ -72,13 +74,16 @@ def parse_page_ozon(url: str, driver) -> Product:
         price_with_card = "Цена с картой отсутствует"
         price_without_card = soup.find('span', class_=re.compile("^[a-zA-Z0-9_]{6} [a-zA-Z0-9_]{6} [a-zA-Z0-9_]{6}$")).text
         price_without_card = price_without_card.replace("\u2009", "")
+        price_without_card = float(re.findall(r'\b\d+\b', price_without_card)[0])
     else:
         price_with_card = price_with_card.parent.parent.text
         price_with_card = price_with_card.replace("\u2009", "")
+        price_with_card = float(re.findall(r'\b\d+\b', price_with_card)[0])
 
         price_without_card = soup.find(string="без Ozon Карты").parent.parent.parent.find("span").text
         price_without_card = price_without_card.replace("\u2009", "")
-
+        price_without_card = float(re.findall(r'\b\d+\b', price_without_card)[0])
+        
     specifications = dict([(x.text, y) for x, y in zip(specifications, new_values)])
 
     return Product(name, price_without_card, brand, price_with_card, specifications, url=url)
@@ -100,12 +105,14 @@ def parse_page_wildberries(url: str, driver) -> Product:
         return None
     else:
         price = price.text.replace("\xa0", "")
+        price = float(re.findall(r'\b\d+\b', price)[0])
     
     price_with_card = soup.find('span', class_=re.compile(".*price-block__wallet-price.*"))
     if price_with_card is None:
         price_with_card = "Цена с картой отсутствует"
     else:
         price_with_card = price_with_card.text.replace("\xa0", "")
+        price_with_card = float(re.findall(r'\b\d+\b', price_with_card)[0])
 
     brand = soup.find('a', class_=re.compile(".*product-page__header-brand.*"))
     if brand is None:
