@@ -185,4 +185,3 @@ async def get_finding_params(callback: Message, state: FSMContext):
             ,)
     await state.clear()
     await callback.answer(reply_markup=default_keyboard)
-    

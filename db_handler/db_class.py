@@ -28,34 +28,24 @@ async def insert_data(product, user_info: User):
     async with async_session() as session:
         async with session.begin():
             user = await session.get(User, user_info.user_id)
-            if user is None:
+            if not user:
                 status = await insert_user(user_info, session)
                 if status:
                     print(f"Добавлен новый пользователь: {user_info.username}")
                 else:
                     return "Не удалось добавить пользователя"
-                status = await insert_product(product, user_info.user_id, session) #TODO test if prod exist
-                if status == "Данный товар уже добавлен":
-                    return status
-                else:
-                    return "Не удалось добавить товар"
+                status = await insert_product(product, user_info.user_id, session)
+                return status
             else:
                 user.last_active = func.now()
                 status = await insert_product(product, user_info.user_id, session)
-                if status == "Данный товар уже добавлен":
-                    return status
-                else:
-                    return "Не удалось добавить товар"
-        await session.commit()
+                return status
         return "Товар успешно добавлен"
         
 
 
 async def insert_product(product, user_id, session) -> bool|str:
     try:
-        results = await get_user_products(user_id)
-        if any(product.name == p.name for p in results):
-            return "Данный товар уже добавлен"
         product = Product(
                 user_id=user_id,
                 url=product.url,
@@ -90,6 +80,59 @@ async def get_user_products(user_id: int):
             result = await session.execute(stmt)
             products = result.scalars().all()
             return products if products else []
+
+
+async def is_product_already_in_db(url, user_id):
+    results = await get_user_products(user_id)
+    if any(url == p.url for p in results):
+        return True
+    return False
+
+
+async def update_user_products_info(user_id):
+    products = get_user_products(user_id)
+    for product in products:
+        products.url
+
+
+async def delete_product(url, user_id):
+    async with async_session() as session:
+        async with session.begin():
+            try:
+                stmt = select(Product).where(
+                    (Product.url == url) & 
+                    (Product.user_id == user_id)
+                )
+                result = await session.execute(stmt)
+                product = result.scalar_one_or_none()
+
+                if not product:
+                    print("Продукт не найден")
+                    return False
+
+                await session.delete(product) 
+                return True
+
+            except Exception as e:
+                print(f"Ошибка при удалении: {str(e)}")
+                return False
+        return True
+  
+    
+async def update_product(product_id: int, **kwargs):
+    async with async_session() as session:
+        async with session.begin():
+            # Получаем продукт
+            stmt = select(Product).where(Product.id == product_id)
+            result = await session.execute(stmt)
+            product = result.scalar_one()
+
+            # Обновляем поля
+            for key, value in kwargs.items():
+                setattr(product, key, value)
+
+            # Добавляем в сессию и сохраняем
+            session.add(product)
 
 
 if __name__ == "__main__":

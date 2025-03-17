@@ -20,8 +20,30 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
   adminer:
     image: adminer
     restart: always
     ports:
       - 8080:8080
+
+  rabbitmq:
+    image: rabbitmq:4.0-management  # Используемый образ
+    container_name: rabbitmq        # Имя контейнера
+    ports:
+      - "5672:5672"                 # Порт для AMQP протокола
+      - "15672:15672"              # Порт для веб-интерфейса управления
+    restart: unless-stopped         # Опционально: перезапуск контейнера, если он остановился
+  redis:
+    image: redis:latest
+    container_name: redis_db
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:  
+  postgres_data:  

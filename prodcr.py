@@ -3,8 +3,8 @@ import uuid
 import json
 import asyncio
 from typing import Dict, Union
-from product import Product  # Предполагаемый класс
-from data import Data  # Предполагаемый класс
+from product import Product  
+from data import Data  
 
 async def rabbitmq_connection():
     """Создание асинхронного подключения к RabbitMQ."""
