@@ -103,7 +103,7 @@ async def process_text(message: Message, state: FSMContext):
     await message.answer(f'Не могу перейти по ссылке.\n\n'
                          f'Отправь ссылку на товар, и я постараюсь найти аналоги дешевле✨\n\n'
                          f'Доступные сайты:\n'
-                         f'{"\n".join(valid_names)}')
+                         f'{"\n".join(valid_names)}', reply_markup=default_keyboard)
 
 
 @find_router.callback_query(F.data == "cost_range")
@@ -178,10 +178,10 @@ async def get_finding_params(callback: Message, state: FSMContext):
     if isinstance(result, str):
         await callback.message.answer(result)
     else:
-        for link, price in result.items():
+        for link, price in result.items()[:10]:
             market = await get_market(link)
             await callback.message.answer(
                 f"Цена: {price}\nМаркетплейс: {market}\n{link}"
             ,)
+    await callback.answer("", reply_markup=default_keyboard)
     await state.clear()
-    await callback.answer(reply_markup=default_keyboard)

@@ -38,12 +38,3 @@ async def find_mode(message:Message, state:FSMContext):
 async def find_mode(message:Message, state:FSMContext):
     await message.answer("Вы можете отслеживать изменения цен на добавленные товары.", reply_markup=track_keyboard)
     await state.set_state(Mode.track_mode)
-    
-start_router.message()
-
-# @start_router.message(F.text)
-# async def any_text(message: Message, state: FSMContext):
-#     await message.answer(f'К сожалению, я не понимаю.\n\n'
-#                          f'Отправь ссылку на товар, и я найду аналоги дешевле✨\n\n'
-#                          f'Доступные сайты:\n'
-#                          f'{available_shops}')

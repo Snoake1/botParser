@@ -82,6 +82,13 @@ async def get_user_products(user_id: int):
             return products if products else []
 
 
+async def get_products():
+    async with async_session() as session:
+        async with session.begin(): 
+            res = await session.execute(select(Product))
+            return res.scalars().all()
+
+
 async def is_product_already_in_db(url, user_id):
     results = await get_user_products(user_id)
     if any(url == p.url for p in results):
@@ -123,7 +130,7 @@ async def update_product(product_id: int, **kwargs):
     async with async_session() as session:
         async with session.begin():
             # Получаем продукт
-            stmt = select(Product).where(Product.id == product_id)
+            stmt = select(Product).where(Product.product_id == product_id)
             result = await session.execute(stmt)
             product = result.scalar_one()
 
