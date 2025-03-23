@@ -34,7 +34,6 @@ class OzonConsumer:
     def __init__(self):
         self.driver = None
         self.port = 9222  # Уникальный порт для Ozon
-        time.sleep(2)
         self._ensure_driver()
 
     def _init_driver(self):
@@ -134,7 +133,7 @@ class OzonConsumer:
                     logger.info("Retrying...")
                     self.driver.quit()
                     self.driver = self._init_driver()
-                    time.sleep(5)
+                    time.sleep(1)
                 else:
                     logger.error("Max retries exceeded. Returning empty result.")
                     return {}
@@ -144,10 +143,12 @@ class OzonConsumer:
                     logger.info("Retrying due to unexpected error...")
                     self.driver.quit()
                     self.driver = self._init_driver()
-                    time.sleep(5)
+                    time.sleep(1)
                 else:
                     logger.error("Max retries exceeded for unexpected error. Returning empty result.")
                     return {}
+            except KeyboardInterrupt:
+                break
 
     async def process_message(self, message: aio_pika.IncomingMessage, channel: aio_pika.Channel):
         """Обработка сообщения асинхронно."""
@@ -196,8 +197,10 @@ class OzonConsumer:
                     await queue.consume(lambda msg: self.process_message(msg, channel))
                     await asyncio.Future()
             except Exception as e:
-                logger.error(f"Ozon_consumer crashed: {e}. Reconnecting in 5 seconds...")
-                await asyncio.sleep(5)
+                logger.error(
+                    f"Ozon_consumer crashed: {e}. Reconnecting in 1 seconds..."
+                )
+                await asyncio.sleep(1)
             finally:
                 if self.driver:
                     self.driver.quit()

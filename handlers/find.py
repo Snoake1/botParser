@@ -5,7 +5,9 @@ from aiogram.fsm.context import FSMContext
 import re
 
 from .start import Mode, track_keyboard, default_keyboard
-from prodcr import find_cheaper_products
+from create_bot import bot
+from botSeeker.producer import find_cheaper_products
+from db_handler.db_class import get_same_prod_from_db
 
 find_router = Router()
 
@@ -168,20 +170,33 @@ async def get_finding_params(callback: Message, state: FSMContext):
     if not url:
         await callback.message.answer("Сначала введите ссылку на товар.")
         return
+
     await callback.message.delete()
     wait_msg = await callback.message.answer("Начинаю поиск. Это может занять некоторое время...")
     
-    result = await find_cheaper_products(url, data.get('cost_range'), data.get('exact_match'))
+    await state.clear()
+
+    result = await find_cheaper_products(
+        url, data.get("cost_range"), data.get("exact_match")
+    )
+    familiar_products = await get_same_prod_from_db(result["name"])
     
     await wait_msg.delete()
+    await callback.message.answer("Пользователи выбирают:")
     
+    for prod in familiar_products:
+        await callback.message.answer(f"Цена: {prod.cur_price}\nСсылка: {prod.url}")
     if isinstance(result, str):
-        await callback.message.answer(result)
+        await callback.message.answer(result, reply_markup=default_keyboard)
     else:
-        for link, price in result.items()[:10]:
+        res = list(result.items())
+        for link, price in res[:10]:
             market = await get_market(link)
             await callback.message.answer(
                 f"Цена: {price}\nМаркетплейс: {market}\n{link}"
-            ,)
-    await callback.answer("", reply_markup=default_keyboard)
-    await state.clear()
+            )
+    await bot.send_message(
+        callback.from_user.id,
+        "Это 10 самых дешевых товаров, что удалось найти",
+        reply_markup=default_keyboard,
+    )

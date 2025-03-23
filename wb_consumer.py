@@ -35,7 +35,6 @@ class WbConsumer:
         self.driver = None
         self.port = 9223
         self.max_init_retries = 3
-        time.sleep(4)  # Задержка 4 секунды, чтобы дать ozon_consumer запуститься первым
         self._ensure_driver()
 
     def _init_driver(self):
@@ -123,7 +122,15 @@ class WbConsumer:
                         link = link['href']
                         price = tile.find('ins', class_=re.compile(".*price__lower-price.*"))
                         if price:
-                            pages_with_price[link] = price.text.replace("\xa0", "")
+                            if cost_range == "Не установлен":
+                                pages_with_price[link] = price.text.replace("\xa0", "")
+                                continue
+                            cost_as_list = list(map(int, cost_range.split()))
+                            print(cost_as_list)
+                            if int(price.text.replace("\xa0", "")[:-1]) in range(
+                                cost_as_list[0], cost_as_list[1]
+                            ):
+                                pages_with_price[link] = price.text.replace("\xa0", "")
                         else:
                             logger.debug(f"No price found for tile: {tile}")
 
@@ -136,7 +143,7 @@ class WbConsumer:
                     logger.info("Retrying...")
                     self.driver.quit()
                     self.driver = self._init_driver()
-                    time.sleep(5)
+                    time.sleep(2)
                 else:
                     logger.error("Max retries exceeded. Returning empty result.")
                     return {}
@@ -146,7 +153,7 @@ class WbConsumer:
                     logger.info("Retrying due to unexpected error...")
                     self.driver.quit()
                     self.driver = self._init_driver()
-                    time.sleep(5)
+                    time.sleep(2)
                 else:
                     logger.error("Max retries exceeded for unexpected error. Returning empty result.")
                     return {}

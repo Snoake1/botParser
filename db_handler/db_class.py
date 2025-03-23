@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from .models import Base, User, Product
 from sqlalchemy.sql import func
+from sqlalchemy import text
 
 engine = create_async_engine(
     f"{config('PG_LINK')}",
@@ -140,6 +141,22 @@ async def update_product(product_id: int, **kwargs):
 
             # Добавляем в сессию и сохраняем
             session.add(product)
+
+
+async def get_same_prod_from_db(name, similarity_threshold):
+    async with async_session() as session:
+        async with session.begin():
+            result = await session.execute(
+                text(
+                    """
+                        SELECT * FROM products 
+                        WHERE similarity(name, :name) > :threshold 
+                        ORDER BY similarity(name, :name) DESC
+                        """
+                ),
+                {"name": name, "threshold": similarity_threshold},
+            )
+            return result.fetchall()
 
 
 if __name__ == "__main__":

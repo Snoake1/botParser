@@ -17,9 +17,10 @@ from db_handler.db_class import (
     get_products,
 )
 from db_handler.models import User, Product
-from prodcr import get_prod
+from botSeeker.producer import get_prod
 from .find import is_valid_url
 from .start import Mode, track_keyboard, default_keyboard
+from create_bot import bot
 
 track_router = Router()
 
@@ -62,10 +63,9 @@ async def send_update_price_message():
             else:
                 txt = "уменьшилась на"
                 min_price = new_prod.price_with_card
-            text = f"{db_prod.name}\n{db_prod.url}\nЦена на товар {txt} {diff}₽\nТекущая цена:{new_prod.price_with_card}\n\
-        Максимальная цена:{max_price}₽\nМинимальная цена:{min_price}₽"
+            text = f"{db_prod.name}\n{db_prod.url}\nЦена на товар: {txt} {diff}₽\nТекущая цена:{new_prod.price_with_card}\nМаксимальная цена:{max_price}₽\nМинимальная цена:{min_price}₽"
             await bot.send_message(db_prod.user_id, text, reply_markup=prod_keyboard)
-        return
+    return
 
 
 @track_router.message(F.text == "Посмотреть отслеживаемые товары", Mode.track_mode)
@@ -106,14 +106,15 @@ async def get_item_for_track(message: Message):
 async def get_item_for_track(message: Message):
     url = message.text
     await message.answer("Операция выполняется...")
+    
     if await is_product_already_in_db(url, message.from_user.id):
         await message.answer("Товар уже добавлен", reply_markup=track_keyboard)
         return
 
     product = await get_prod(message.text)
     user_info = User(user_id=message.from_user.id, username=message.from_user.username)
-
     result = await insert_data(product, user_info)
+    
     if result:
         await message.answer("Товар успешно добавлен")
         return
