@@ -49,14 +49,14 @@ class WbConsumer:
                 )
                 options.add_argument(f"--remote-debugging-port={self.port}")
                 options.add_argument("--headless")
-                options.add_argument("--disable-gpu")  # Уменьшение нагрузки
+                options.add_argument("--disable-gpu")  
                 driver = uc.Chrome(options=options, version_main=133, delay=random.randint(1, 3))
                 logger.info(f"WB driver initialized successfully on port {self.port}")
                 return driver
             except Exception as e:
                 logger.error(f"Failed to initialize WB driver on port {self.port}, attempt {attempt + 1}/{self.max_init_retries}: {e}")
                 if attempt < self.max_init_retries - 1:
-                    time.sleep(5)  # Пауза перед повторной попыткой
+                    time.sleep(5)  
                 else:
                     logger.critical("Max retries exceeded for driver initialization. Exiting.")
                     raise

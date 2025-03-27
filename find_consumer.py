@@ -17,6 +17,7 @@ def get_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(f"--remote-debugging-port={9221}")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
     
     driver = uc.Chrome(options=options, version_main=133, delay=random.randint(1, 3))
@@ -173,7 +174,7 @@ def main():
 
 if __name__ == '__main__':
     try:
-        display = Display(visible=False) # to comment for windows
+        display = Display(visible=True) # to comment for windows
         display.start() # to comment for windows
         main()
     except KeyboardInterrupt:

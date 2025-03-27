@@ -9,8 +9,8 @@ scheduler = AsyncIOScheduler()
 
 
 async def main():
-    scheduler.add_job(send_update_price_message, "interval", minutes=1)  # test
-    #scheduler.add_job(send_update_price_message, "cron", hour=18, minute=0)  # Отправка каждый день в 18:00
+    #scheduler.add_job(send_update_price_message, "interval", minutes=1)  # debug
+    scheduler.add_job(send_update_price_message, "cron", hour=18, minute=0)  # Отправка каждый день в 18:00
     scheduler.start()
     
     dp.include_router(track_router)

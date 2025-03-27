@@ -4,9 +4,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import re
 
-from .start import Mode, track_keyboard, default_keyboard
+from .start import default_keyboard
 from create_bot import bot
-from botSeeker.producer import find_cheaper_products
+from producer import find_cheaper_products
 from db_handler.db_class import get_same_prod_from_db
 
 find_router = Router()
@@ -26,6 +26,9 @@ def get_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="💰Установить диапазон цен", callback_data="cost_range")
+        ],
+        [
+            InlineKeyboardButton(text="Отмена", callback_data="cancel")
         ]
     ])
 
@@ -80,32 +83,25 @@ async def get_text(exact_match: bool = False, cost_range: str = "Не устан
     )
     
 
-@find_router.message(F.text.func(is_valid_url), Mode.find_mode)
-async def process_url(message: Message, state: FSMContext):
-    url = await get_url(message.text)
-    await state.clear()
+@find_router.callback_query(F.data == "find_cheaper")
+async def process_url(callback: Message, state: FSMContext):
+    url = await get_url(callback.message.text)
+    await callback.message.delete()
     await state.set_data({
         'exact_match': False,
         'cost_range': "Не установлен",
         'url': url
     })
     
-    await message.answer(await get_text(), reply_markup=get_keyboard())
+    await callback.message.answer(await get_text(), reply_markup=get_keyboard())
 
 
-@find_router.message(F.text == "Отслеживаемые товары", Mode.find_mode)
-async def process_change_mode(message: Message, state: FSMContext):
-    await message.answer("Вы можете отслеживать изменения цен на добавленные товары.", reply_markup=track_keyboard)
-    await state.set_state(Mode.track_mode)
-
-
-
-@find_router.message(Mode.find_mode)
-async def process_text(message: Message, state: FSMContext):
-    await message.answer(f'Не могу перейти по ссылке.\n\n'
-                         f'Отправь ссылку на товар, и я постараюсь найти аналоги дешевле✨\n\n'
-                         f'Доступные сайты:\n'
-                         f'{"\n".join(valid_names)}', reply_markup=default_keyboard)
+# @find_router.message(Mode.find_mode)
+# async def process_text(message: Message, state: FSMContext):
+#     await message.answer(f'Не могу перейти по ссылке.\n\n'
+#                          f'Отправь ссылку на товар, и я постараюсь найти аналоги дешевле✨\n\n'
+#                          f'Доступные сайты:\n'
+#                          f'{"\n".join(valid_names)}', reply_markup=default_keyboard)
 
 
 @find_router.callback_query(F.data == "cost_range")
