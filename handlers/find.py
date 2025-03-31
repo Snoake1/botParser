@@ -1,10 +1,17 @@
+import re
 from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    KeyboardButton,
+)
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-import re
 
-from .start import default_keyboard
+from start import default_keyboard, get_url
 from create_bot import bot
 from producer import find_cheaper_products
 from db_handler.db_class import get_same_prod_from_db
@@ -13,63 +20,56 @@ find_router = Router()
 
 valid_names = ("ozon.ru", "wildberries.ru")
 
+
 class Find(StatesGroup):
     cost_range = State()
     exact_match = State()
 
 
 def get_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅Начать поиск", callback_data="find"),
-            InlineKeyboardButton(text="🔍Точность поиска", callback_data="exact_match")
-        ],
-        [
-            InlineKeyboardButton(text="💰Установить диапазон цен", callback_data="cost_range")
-        ],
-        [
-            InlineKeyboardButton(text="Отмена", callback_data="cancel")
+    """Клавиатура настройки поиска товаров"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅Начать поиск", callback_data="find"),
+                InlineKeyboardButton(
+                    text="🔍Точность поиска", callback_data="exact_match"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💰Установить диапазон цен", callback_data="cost_range"
+                )
+            ],
+            [InlineKeyboardButton(text="Отмена", callback_data="cancel")],
         ]
-    ])
-
-
-
-def is_valid_url(text: str) -> bool:
-    url_pattern = re.compile(
-        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     )
-    finded_string = url_pattern.search(text)
-    if not bool(finded_string):
-        return False
-    
-    return any(name in text for name in valid_names)
+
 
 def is_valid_range(text: str) -> bool:
+    """Проверка диапазона цен"""
     try:
         borders = text.split()
-        return len(borders) == 2 and int(borders[0]) <= int(borders[1])
+        return (
+            len(borders) == 2
+            and int(borders[0]) <= int(borders[1])
+            and int(borders[0]) > 0
+        )
     except (ValueError, IndexError):
         return False
 
 
-async def get_url(text: str) -> str:
-    url_pattern = re.compile(
-        r'(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)'
-    )
-    url = url_pattern.search(text).group(0)
-    return url
-
-
 async def get_market(url: str) -> str:
+    """Определение сайта"""
     if "wildberries" in url:
         return "Wildberries"
-    elif "ozon" in url:
+    if "ozon" in url:
         return "Ozon"
-    else:
-        return "Неизвестный сайт"
+    return "Неизвестный сайт"
 
 
 async def get_text(exact_match: bool = False, cost_range: str = "Не установлен") -> str:
+    """Информация о текущих настройках для поиска товаров"""
     if cost_range == "Не установлен":
         range_text = "Не установлен"
     else:
@@ -81,18 +81,17 @@ async def get_text(exact_match: bool = False, cost_range: str = "Не устан
         f"Диапазон цен: {range_text}\n\n"
         "Желаете установить дополнительные параметры поиска?"
     )
-    
+
 
 @find_router.callback_query(F.data == "find_cheaper")
 async def process_url(callback: Message, state: FSMContext):
+    """ОБработка сообщения с url адрессом"""
     url = await get_url(callback.message.text)
     await callback.message.delete()
-    await state.set_data({
-        'exact_match': False,
-        'cost_range': "Не установлен",
-        'url': url
-    })
-    
+    await state.set_data(
+        {"exact_match": False, "cost_range": "Не установлен", "url": url}
+    )
+
     await callback.message.answer(await get_text(), reply_markup=get_keyboard())
 
 
@@ -106,17 +105,21 @@ async def process_url(callback: Message, state: FSMContext):
 
 @find_router.callback_query(F.data == "cost_range")
 async def set_cost_range(callback: Message, state: FSMContext):
+    """ОБработка нажатия кнопки установки диапазона"""
     await callback.message.delete()
     data = await state.get_data()
-    if data.get('url') is None:
+    if data.get("url") is None:
         await callback.message.answer("Сначала введите ссылку на товар.")
         return
-    await callback.message.answer("Введите диапазон цен через пробел (например, 1000 5000):")
+    await callback.message.answer(
+        "Введите диапазон цен через пробел (например, 1000 5000):"
+    )
     await state.set_state(Find.cost_range)
-    
+
 
 @find_router.message(F.text, Find.cost_range)
 async def process_cost_range(message: Message, state: FSMContext):
+    """Установка диапазона цен"""
     if not re.match(r"^\d+ \d+$", message.text):
         await message.answer("Неверный формат. Введите диапазон цен через пробел")
         return
@@ -125,18 +128,25 @@ async def process_cost_range(message: Message, state: FSMContext):
         return
     await state.update_data(cost_range=message.text)
     data = await state.get_data()
-    await message.answer(await get_text(data.get('exact_match'), data.get('cost_range')), reply_markup=get_keyboard())
+    await message.answer(
+        await get_text(data.get("exact_match"), data.get("cost_range")),
+        reply_markup=get_keyboard(),
+    )
 
 
 @find_router.callback_query(F.data == "exact_match")
 async def set_exact_match(callback: Message, state: FSMContext):
+    "Обработка нажатия на кнопку точности поиска"
     await callback.message.delete()
     data = await state.get_data()
-    if not data.get('url'):
+    if not data.get("url"):
         await callback.message.answer("Сначала введите ссылку на товар.")
         return
     buttons = [
-        [KeyboardButton(text="✅Точное совпадение"), KeyboardButton(text="❌Не точный поиск")]
+        [
+            KeyboardButton(text="✅Точное совпадение"),
+            KeyboardButton(text="❌Не точный поиск"),
+        ]
     ]
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, keyboard=buttons)
     await callback.message.answer("Выберите точность поиска:", reply_markup=keyboard)
@@ -145,6 +155,7 @@ async def set_exact_match(callback: Message, state: FSMContext):
 
 @find_router.message(Find.exact_match)
 async def process_exact_match(message: Message, state: FSMContext):
+    "Установка точности совпадения"
     text = message.text
     if text == "✅Точное совпадение":
         await state.update_data(exact_match=True)
@@ -155,31 +166,37 @@ async def process_exact_match(message: Message, state: FSMContext):
         return
     data = await state.get_data()
     await message.answer("Точность установлена.", reply_markup=ReplyKeyboardRemove())
-    await message.answer(await get_text(data['exact_match'], data['cost_range']), reply_markup=get_keyboard())
+    await message.answer(
+        await get_text(data["exact_match"], data["cost_range"]),
+        reply_markup=get_keyboard(),
+    )
 
 
 @find_router.callback_query(F.data == "find")
 async def get_finding_params(callback: Message, state: FSMContext):
+    """Обработка кнопки "Начать поиск"""
     data = await state.get_data()
-    url = data.get('url')
-    
+    url = data.get("url")
+
     if not url:
         await callback.message.answer("Сначала введите ссылку на товар.")
         return
 
     await callback.message.delete()
-    wait_msg = await callback.message.answer("Начинаю поиск. Это может занять некоторое время...")
-    
+    wait_msg = await callback.message.answer(
+        "Начинаю поиск. Это может занять некоторое время..."
+    )
+
     await state.clear()
 
     result = await find_cheaper_products(
         url, data.get("cost_range"), data.get("exact_match")
     )
     familiar_products = await get_same_prod_from_db(result["name"])
-    
+
     await wait_msg.delete()
     await callback.message.answer("Пользователи выбирают:")
-    
+
     for prod in familiar_products:
         await callback.message.answer(f"Цена: {prod.cur_price}\nСсылка: {prod.url}")
     if isinstance(result, str):

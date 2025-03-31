@@ -1,9 +1,12 @@
-import aio_pika
 import asyncio
 import json
 import random
 import re
 import time
+import logging
+from http.client import RemoteDisconnected
+from urllib3.exceptions import MaxRetryError, NewConnectionError
+import aio_pika
 from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
 from selenium import webdriver
@@ -11,15 +14,12 @@ from selenium.common.exceptions import WebDriverException
 from pyvirtualdisplay import Display
 from product import Product
 from data import Data
-import logging
-from urllib3.exceptions import MaxRetryError, NewConnectionError
-from http.client import RemoteDisconnected
 
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ try:
     display.start()
 except ImportError:
     display = None
+
 
 class WbConsumer:
     def __init__(self):
@@ -45,20 +46,29 @@ class WbConsumer:
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-blink-features=AutomationControlled")
                 options.add_argument(
-                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)\
+                        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                 )
                 options.add_argument(f"--remote-debugging-port={self.port}")
                 options.add_argument("--headless")
-                options.add_argument("--disable-gpu")  
-                driver = uc.Chrome(options=options, version_main=133, delay=random.randint(1, 3))
-                logger.info(f"WB driver initialized successfully on port {self.port}")
+                options.add_argument("--disable-gpu")
+                driver = uc.Chrome(
+                    options=options, version_main=133, delay=random.randint(1, 3)
+                )
+                logger.info("WB driver initialized successfully on port %s", self.port)
                 return driver
             except Exception as e:
-                logger.error(f"Failed to initialize WB driver on port {self.port}, attempt {attempt + 1}/{self.max_init_retries}: {e}")
+                logger.error(
+                    "Failed to initialize WB driver on port\
+                        %s, attempt %s/%s: %s", self.port, attempt+1,
+                        self.max_init_retries, e
+                )
                 if attempt < self.max_init_retries - 1:
-                    time.sleep(5)  
+                    time.sleep(5)
                 else:
-                    logger.critical("Max retries exceeded for driver initialization. Exiting.")
+                    logger.critical(
+                        "Max retries exceeded for driver initialization. Exiting."
+                    )
                     raise
 
     def _ensure_driver(self):
@@ -73,11 +83,18 @@ class WbConsumer:
         try:
             self.driver.current_url
             return True
-        except (WebDriverException, MaxRetryError, NewConnectionError, RemoteDisconnected):
+        except (
+            WebDriverException,
+            MaxRetryError,
+            NewConnectionError,
+            RemoteDisconnected,
+        ):
             logger.warning("Driver is not responding")
             return False
 
-    def get_pages_wb(self, product: Product, cost_range: str, exact_match: bool) -> dict:
+    def get_pages_wb(
+        self, product: Product, cost_range: str, exact_match: bool
+    ) -> dict:
         """Синхронная функция парсинга Wildberries с переиспользуемым драйвером."""
         max_retries = 3
         for attempt in range(max_retries):
@@ -98,29 +115,38 @@ class WbConsumer:
                     borders = cost_range.split()
                     formatted_range = f"&priceU={borders[0]}00%3B{borders[1]}00"
 
-                url = f"https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search={name.replace(' ', '+')}{formatted_range}"
-                logger.info(f"Fetching URL (attempt {attempt + 1}/{max_retries}): {url}")
+                url = f"https://www.wildberries.ru/catalog/0/search.aspx?\
+                    sort=popular&search={name.replace(' ', '+')}{formatted_range}"
+                logger.info(
+                    "Fetching URL (attempt %s/%s): %s", attempt+1, max_retries, url
+                )
                 self.driver.get(url)
                 time.sleep(random.uniform(3, 6))  # Увеличенное время ожидания
 
                 page_source = self.driver.page_source
                 if not page_source or len(page_source) < 100:
-                    logger.warning(f"Page source is empty or too short (length: {len(page_source)})")
+                    logger.warning(
+                        "Page source is empty or too short (length: %s)", len(page_source)
+                    )
                     raise WebDriverException("Empty page source")
 
-                logger.debug(f"Page source length: {len(page_source)}")
-                soup = BeautifulSoup(page_source, 'html.parser')
-                tiles = soup.find_all('div', class_=re.compile(".*product-card__wrapper*"))
+                logger.debug("Page source length: %s", len(page_source))
+                soup = BeautifulSoup(page_source, "html.parser")
+                tiles = soup.find_all(
+                    "div", class_=re.compile(".*product-card__wrapper*")
+                )
                 if not tiles:
                     logger.warning("No tiles found on page")
                     return {}
 
                 pages_with_price = {}
                 for tile in tiles[:10]:
-                    link = tile.find('a')
-                    if link and 'href' in link.attrs:
-                        link = link['href']
-                        price = tile.find('ins', class_=re.compile(".*price__lower-price.*"))
+                    link = tile.find("a")
+                    if link and "href" in link.attrs:
+                        link = link["href"]
+                        price = tile.find(
+                            "ins", class_=re.compile(".*price__lower-price.*")
+                        )
                         if price:
                             if cost_range == "Не установлен":
                                 pages_with_price[link] = price.text.replace("\xa0", "")
@@ -132,13 +158,20 @@ class WbConsumer:
                             ):
                                 pages_with_price[link] = price.text.replace("\xa0", "")
                         else:
-                            logger.debug(f"No price found for tile: {tile}")
+                            logger.debug("No price found for tile: %s", tile)
 
-                logger.info(f"Found {len(pages_with_price)} items")
+                logger.info("Found %s items", len(pages_with_price))
                 return pages_with_price
 
-            except (MaxRetryError, NewConnectionError, WebDriverException, RemoteDisconnected) as e:
-                logger.error(f"WebDriver connection error on attempt {attempt + 1}: {e}")
+            except (
+                MaxRetryError,
+                NewConnectionError,
+                WebDriverException,
+                RemoteDisconnected,
+            ) as e:
+                logger.error(
+                    "WebDriver connection error on attempt %s: %s", attempt+1, e
+                )
                 if attempt < max_retries - 1:
                     logger.info("Retrying...")
                     self.driver.quit()
@@ -148,22 +181,28 @@ class WbConsumer:
                     logger.error("Max retries exceeded. Returning empty result.")
                     return {}
             except Exception as e:
-                logger.error(f"Unexpected error during parsing on attempt {attempt + 1}: {e}")
+                logger.error(
+                    "Unexpected error during parsing on attempt %s: %s", attempt+1, e
+                )
                 if attempt < max_retries - 1:
                     logger.info("Retrying due to unexpected error...")
                     self.driver.quit()
                     self.driver = self._init_driver()
                     time.sleep(2)
                 else:
-                    logger.error("Max retries exceeded for unexpected error. Returning empty result.")
+                    logger.error(
+                        "Max retries exceeded for unexpected error. Returning empty result."
+                    )
                     return {}
 
-    async def process_message(self, message: aio_pika.IncomingMessage, channel: aio_pika.Channel):
+    async def process_message(
+        self, message: aio_pika.IncomingMessage, channel: aio_pika.Channel
+    ):
         """Обработка сообщения асинхронно."""
         async with message.process():
             try:
                 data_json = message.body.decode()
-                logger.info(f"Received data: {data_json}")
+                logger.info("Received data: %s", data_json)
                 product, cost_range, exact_match = Data.from_json(data_json)
 
                 loop = asyncio.get_event_loop()
@@ -175,27 +214,29 @@ class WbConsumer:
                     aio_pika.Message(
                         body=json.dumps(response).encode(),
                         correlation_id=message.correlation_id,
-                        reply_to=message.reply_to
+                        reply_to=message.reply_to,
                     ),
-                    routing_key=message.reply_to
+                    routing_key=message.reply_to,
                 )
-                logger.info(f"Sent response: {response}")
+                logger.info("Sent response: %s", response)
             except Exception as e:
-                logger.error(f"Error processing message: {e}")
+                logger.error("Error processing message: %s", e)
                 await channel.default_exchange.publish(
                     aio_pika.Message(
                         body=json.dumps({}).encode(),
                         correlation_id=message.correlation_id,
-                        reply_to=message.reply_to
+                        reply_to=message.reply_to,
                     ),
-                    routing_key=message.reply_to
+                    routing_key=message.reply_to,
                 )
 
     async def run(self):
         """Запуск консьюмера."""
         while True:
             try:
-                connection = await aio_pika.connect_robust("amqp://guest:guest@localhost/")
+                connection = await aio_pika.connect_robust(
+                    "amqp://guest:guest@localhost/"
+                )
                 async with connection:
                     channel = await connection.channel()
                     queue = await channel.declare_queue("wb_answer")
@@ -205,11 +246,12 @@ class WbConsumer:
                     await queue.consume(lambda msg: self.process_message(msg, channel))
                     await asyncio.Future()
             except Exception as e:
-                logger.error(f"Wb_consumer crashed: {e}. Reconnecting in 5 seconds...")
+                logger.error("Wb_consumer crashed: %s. Reconnecting in 5 seconds...", e)
                 await asyncio.sleep(5)
             finally:
                 if self.driver:
                     self.driver.quit()
+
 
 if __name__ == "__main__":
     try:

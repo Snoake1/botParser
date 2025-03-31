@@ -1,16 +1,20 @@
-import aio_pika
 import uuid
 import json
 import asyncio
 from typing import Dict, Union
-from product import Product  
-from data import Data  
+import aio_pika
+from product import Product
+from data import Data
+
 
 async def rabbitmq_connection():
     """Создание асинхронного подключения к RabbitMQ."""
     return await aio_pika.connect_robust("amqp://guest:guest@localhost/")
 
+
 class AsyncFindRpcClient:
+    """Обмен данными с find consumer"""
+
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -18,8 +22,8 @@ class AsyncFindRpcClient:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    async def setup(self):
-        """Настройка соединения и очередей."""
+    async def __init__(self):
+        """Настройка соединения и очередей"""
         self.connection = await rabbitmq_connection()
         self.channel = await self.connection.channel()
         self.callback_queue = await self.channel.declare_queue(exclusive=True)
@@ -28,15 +32,15 @@ class AsyncFindRpcClient:
         await self.callback_queue.consume(self.on_response)
 
     async def on_response(self, message: aio_pika.IncomingMessage):
-        """Обработка ответа от RabbitMQ."""
+        """Обработка ответа от RabbitMQ"""
         async with message.process():
             correlation_id = message.correlation_id
             self.responses[correlation_id] = message.body
 
     async def call(self, url: str) -> bytes:
-        """Асинхронный RPC-вызов."""
-        if not hasattr(self, 'channel'):
-            await self.setup()
+        """Асинхронный RPC-вызов"""
+        if not hasattr(self, "channel"):
+            await self.__init__
 
         correlation_id = str(uuid.uuid4())
         self.responses[correlation_id] = None
@@ -45,9 +49,9 @@ class AsyncFindRpcClient:
             aio_pika.Message(
                 body=url.encode(),
                 correlation_id=correlation_id,
-                reply_to=self.callback_queue.name
+                reply_to=self.callback_queue.name,
             ),
-            routing_key="find_answer"
+            routing_key="find_answer",
         )
 
         # Ожидание ответа
@@ -56,7 +60,10 @@ class AsyncFindRpcClient:
         response = self.responses.pop(correlation_id)
         return response
 
+
 class AsyncOzonRpcClient:
+    """Обмен данными с ozon consumer"""
+
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -64,7 +71,7 @@ class AsyncOzonRpcClient:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    async def setup(self):
+    async def __init__(self):
         self.connection = await rabbitmq_connection()
         self.channel = await self.connection.channel()
         self.callback_queue = await self.channel.declare_queue(exclusive=True)
@@ -72,13 +79,15 @@ class AsyncOzonRpcClient:
         await self.callback_queue.consume(self.on_response)
 
     async def on_response(self, message: aio_pika.IncomingMessage):
+        """Обработка ответа от RabbitMQ"""
         async with message.process():
             correlation_id = message.correlation_id
             self.responses[correlation_id] = message.body
 
     async def call(self, data: str) -> bytes:
-        if not hasattr(self, 'channel'):
-            await self.setup()
+        """Асинхронный RPC-вызов."""
+        if not hasattr(self, "channel"):
+            await self.__init__()
 
         correlation_id = str(uuid.uuid4())
         self.responses[correlation_id] = None
@@ -87,25 +96,28 @@ class AsyncOzonRpcClient:
             aio_pika.Message(
                 body=data.encode(),
                 correlation_id=correlation_id,
-                reply_to=self.callback_queue.name
+                reply_to=self.callback_queue.name,
             ),
-            routing_key="ozon_answer"
+            routing_key="ozon_answer",
         )
 
         while self.responses[correlation_id] is None:
             await asyncio.sleep(0.1)
         response = self.responses.pop(correlation_id)
         return response
+
 
 class AsyncWbRpcClient:
+    """Обмен данными с wb consumer"""
+
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls):
         if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    async def setup(self):
+    async def __init__(self):
         self.connection = await rabbitmq_connection()
         self.channel = await self.connection.channel()
         self.callback_queue = await self.channel.declare_queue(exclusive=True)
@@ -113,13 +125,15 @@ class AsyncWbRpcClient:
         await self.callback_queue.consume(self.on_response)
 
     async def on_response(self, message: aio_pika.IncomingMessage):
+        """Обработка ответа от RabbitMQ"""
         async with message.process():
             correlation_id = message.correlation_id
             self.responses[correlation_id] = message.body
 
     async def call(self, data: str) -> bytes:
-        if not hasattr(self, 'channel'):
-            await self.setup()
+        """Асинхронный RPC-вызов"""
+        if not hasattr(self, "channel"):
+            await self.__init__()
 
         correlation_id = str(uuid.uuid4())
         self.responses[correlation_id] = None
@@ -128,9 +142,9 @@ class AsyncWbRpcClient:
             aio_pika.Message(
                 body=data.encode(),
                 correlation_id=correlation_id,
-                reply_to=self.callback_queue.name
+                reply_to=self.callback_queue.name,
             ),
-            routing_key="wb_answer"
+            routing_key="wb_answer",
         )
 
         while self.responses[correlation_id] is None:
@@ -138,7 +152,10 @@ class AsyncWbRpcClient:
         response = self.responses.pop(correlation_id)
         return response
 
-async def find_cheaper_products(url: str, cost_range: str, exact_match: bool) -> Union[Dict[str, str], str]:
+
+async def find_cheaper_products(
+    url: str, cost_range: str, exact_match: bool
+) -> Union[Dict[str, str], str]:
     """Асинхронная функция поиска более дешевых товаров."""
     find_rpc = AsyncFindRpcClient()
     ozon_rpc = AsyncOzonRpcClient()
@@ -154,10 +171,9 @@ async def find_cheaper_products(url: str, cost_range: str, exact_match: bool) ->
 
     if isinstance(product, Product):
         ozon_task = ozon_rpc.call(data.to_json())
-        # await asyncio.sleep(1)
         wb_task = wb_rpc.call(data.to_json())
         ozon_response, wb_response = await asyncio.gather(ozon_task, wb_task)
-        
+
         print(f" [.] Got ozon {ozon_response}")
         print(f" [.] Got wb {wb_response}")
 
@@ -166,20 +182,29 @@ async def find_cheaper_products(url: str, cost_range: str, exact_match: bool) ->
         return ret_dict if ret_dict else "Товар не найден"
     return "Ошибка при получении данных о товаре"
 
+
 async def get_prod(url):
+    """
+    Получение данных о товаре
+    без поиска похожих товаров
+    """
     find_rpc = AsyncFindRpcClient()
     print(f" [x] Requesting just parse: {url};\n")
     response = await find_rpc.call(url)
     product = Product.from_json(response.decode())
     return product
 
+
 async def main():
+    """Отладочны запуск"""
     result = await find_cheaper_products(
-        "https://www.ozon.ru/product/nabor-nozhey-kuhonnyh-samura-golf-sg-0240-nabor-ih-4-h-nozhey-1576657502/?campaignId=527",
+        "https://www.ozon.ru/product/nabor-nozhey-\
+        kuhonnyh-samura-golf-sg-0240-nabor-ih-4-h-nozhey-1576657502/?campaignId=527",
         "1000 3000",
-        True
+        True,
     )
     print(result)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
