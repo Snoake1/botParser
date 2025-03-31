@@ -11,7 +11,7 @@ from aiogram.types import (
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
-from start import default_keyboard, get_url
+from handlers.start import default_keyboard, get_url
 from create_bot import bot
 from producer import find_cheaper_products
 from db_handler.db_class import get_same_prod_from_db
@@ -189,19 +189,23 @@ async def get_finding_params(callback: Message, state: FSMContext):
 
     await state.clear()
 
-    result = await find_cheaper_products(
+    name, result = await find_cheaper_products(
         url, data.get("cost_range"), data.get("exact_match")
     )
-    familiar_products = await get_same_prod_from_db(result["name"])
 
+    familiar_products = await get_same_prod_from_db(name)
+    print(familiar_products)
     await wait_msg.delete()
-    await callback.message.answer("Пользователи выбирают:")
+    if familiar_products:
+        await callback.message.answer("Пользователи выбирают:")
 
-    for prod in familiar_products:
-        await callback.message.answer(f"Цена: {prod.cur_price}\nСсылка: {prod.url}")
+        for prod in familiar_products:
+            await callback.message.answer(f"Цена: {prod.cur_price}\nСсылка: {prod.url}")
+
     if isinstance(result, str):
         await callback.message.answer(result, reply_markup=default_keyboard)
     else:
+        await callback.message.answer("Найденные товары:")
         res = list(result.items())
         for link, price in res[:10]:
             market = await get_market(link)
@@ -210,6 +214,6 @@ async def get_finding_params(callback: Message, state: FSMContext):
             )
     await bot.send_message(
         callback.from_user.id,
-        "Это 10 самых дешевых товаров, что удалось найти",
+        "Это самые дешевые товары, что удалось найти",
         reply_markup=default_keyboard,
     )

@@ -4,9 +4,9 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
 )
-from start import default_keyboard
-from botSeeker.db_handler.models import User
-from botSeeker.db_handler.db_class import (
+from handlers.start import default_keyboard
+from db_handler.models import User
+from db_handler.db_class import (
     insert_data,
     get_user_products,
     is_product_already_in_db,
@@ -14,8 +14,8 @@ from botSeeker.db_handler.db_class import (
     update_product,
     get_products,
 )
-from botSeeker.producer import get_prod
-from botSeeker.create_bot import bot
+from producer import get_prod
+from create_bot import bot
 
 track_router = Router()
 
@@ -102,7 +102,7 @@ async def get_item_for_track(callback: Message):
     """Обработчик добавления товара"""
     url = callback.message.text
     user_id = callback.from_user.id
-    await callback.message.answer(f"Операция выполняется...{user_id}")
+    await callback.message.answer("Операция выполняется...")
 
     if await is_product_already_in_db(url, user_id):
         await callback.message.answer(

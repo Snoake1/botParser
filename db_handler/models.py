@@ -13,8 +13,8 @@ class User(Base):
 
     user_id = Column(Integer, primary_key=True, autoincrement=False)
     username = Column(String(32))
-    created_at = Column(DateTime(timezone=True), server_default=func.now)
-    last_active = Column(DateTime(timezone=True), server_default=func.now)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_active = Column(DateTime(timezone=True), server_default=func.now())
 
     # Связь с Products (один-ко-многим)
     products = relationship("Product", back_populates="user")
@@ -36,8 +36,8 @@ class Product(Base):
     )  # Цена с картой, если есть возможность купить с картой
     max_price = Column(Numeric(15, 2))
     min_price = Column(Numeric(15, 2))
-    created_at = Column(DateTime(timezone=True), server_default=func.now)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Связь с User (обратная)
     user = relationship("User", back_populates="products")

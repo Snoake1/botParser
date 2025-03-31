@@ -22,7 +22,7 @@ class AsyncFindRpcClient:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    async def __init__(self):
+    async def setup(self):
         """Настройка соединения и очередей"""
         self.connection = await rabbitmq_connection()
         self.channel = await self.connection.channel()
@@ -40,7 +40,7 @@ class AsyncFindRpcClient:
     async def call(self, url: str) -> bytes:
         """Асинхронный RPC-вызов"""
         if not hasattr(self, "channel"):
-            await self.__init__
+            await self.setup()
 
         correlation_id = str(uuid.uuid4())
         self.responses[correlation_id] = None
@@ -71,7 +71,7 @@ class AsyncOzonRpcClient:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    async def __init__(self):
+    async def setup(self):
         self.connection = await rabbitmq_connection()
         self.channel = await self.connection.channel()
         self.callback_queue = await self.channel.declare_queue(exclusive=True)
@@ -87,7 +87,7 @@ class AsyncOzonRpcClient:
     async def call(self, data: str) -> bytes:
         """Асинхронный RPC-вызов."""
         if not hasattr(self, "channel"):
-            await self.__init__()
+            await self.setup()
 
         correlation_id = str(uuid.uuid4())
         self.responses[correlation_id] = None
@@ -117,7 +117,7 @@ class AsyncWbRpcClient:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    async def __init__(self):
+    async def setup(self):
         self.connection = await rabbitmq_connection()
         self.channel = await self.connection.channel()
         self.callback_queue = await self.channel.declare_queue(exclusive=True)
@@ -133,7 +133,7 @@ class AsyncWbRpcClient:
     async def call(self, data: str) -> bytes:
         """Асинхронный RPC-вызов"""
         if not hasattr(self, "channel"):
-            await self.__init__()
+            await self.setup()
 
         correlation_id = str(uuid.uuid4())
         self.responses[correlation_id] = None
@@ -179,7 +179,7 @@ async def find_cheaper_products(
 
         ret_dict = json.loads(ozon_response) | json.loads(wb_response)
         ret_dict = dict(sorted(ret_dict.items(), key=lambda x: int(x[1][:-1])))
-        return ret_dict if ret_dict else "Товар не найден"
+        return product.name, ret_dict if ret_dict else "Товар не найден"
     return "Ошибка при получении данных о товаре"
 
 

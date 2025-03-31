@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 from sqlalchemy import text
-from models import Base, User, Product
+from db_handler.models import Base, User, Product
 
 engine = create_async_engine(
     f"{config('PG_LINK')}", echo=True  # Включает логи SQL-запросов для отладки
@@ -37,7 +37,7 @@ async def insert_data(product, user_info: User):
                     return "Не удалось добавить пользователя"
                 status = await insert_product(product, user_info.user_id, session)
                 return status
-            user.last_active = func.now
+            user.last_active = func.now()
             status = await insert_product(product, user_info.user_id, session)
             return status
 
@@ -140,21 +140,22 @@ async def update_product(product_id: int, **kwargs):
             session.add(product)
 
 
-async def get_same_prod_from_db(name, similarity_threshold):
+async def get_same_prod_from_db(name, threshold=0.7, limit=10):
     """Функция получения похожих товаров из базы данных"""
     async with async_session() as session:
-        async with session.begin():
-            result = await session.execute(
-                text(
-                    """
-                        SELECT * FROM products 
-                        WHERE similarity(name, :name) > :threshold 
-                        ORDER BY similarity(name, :name) DESC
-                        """
-                ),
-                {"name": name, "threshold": similarity_threshold},
-            )
-            return result.fetchall()
+        result = await session.execute(
+            text("""
+                SELECT *, 
+                       similarity(name, :name) as sim_score
+                FROM products 
+                WHERE name % :name
+                AND similarity(name, :name) > :threshold
+                ORDER BY sim_score DESC
+                LIMIT :limit
+            """),
+            {"name": name, "threshold": threshold, "limit": limit}
+        )
+        return result.mappings().all()
 
 
 if __name__ == "__main__":

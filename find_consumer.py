@@ -201,7 +201,7 @@ def main():
 
 if __name__ == "__main__":
     try:
-        display = Display(visible=True)  # to comment for windows
+        display = Display(visible=False)  # to comment for windows
         display.start()  # to comment for windows
         main()
     except KeyboardInterrupt:

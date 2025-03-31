@@ -1,4 +1,5 @@
 import logging
+import datetime
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -7,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from decouple import config
 from redis.asyncio import Redis
 
-scheduler = AsyncIOScheduler(timezone="UTC+3")
+scheduler = AsyncIOScheduler(timezone=datetime.timezone.utc)
 admins = [int(admin_id) for admin_id in config("ADMINS").split(",")]
 
 REDIS_HOST = config("REDIS_HOST")
