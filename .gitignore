@@ -1,7 +1,6 @@
 venv
 *.png
 .idea
-*.txt
 *__pycache__
 .env
 .coverage
