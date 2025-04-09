@@ -20,7 +20,7 @@ def get_driver():
     options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)\
         AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15")
 
-    driver = uc.Chrome(options=options, version_main=134, delay=random.randint(1, 3))
+    driver = uc.Chrome(options=options, version_main=135, delay=random.randint(1, 3))
     # driver.get("https://www.browserscan.net/ru/bot-detection")
     # time.sleep(10)
     # driver.get("https://nowsecure.nl")
@@ -168,7 +168,7 @@ def get_product_info(url: str, driver) -> Product | str:
     product = parse(url, driver)
     if isinstance(product, str):
         return product
-    return product.to_json() if not product else None
+    return product.to_json() if product != None else None
 
 
 def on_request(ch, method, props, body):
@@ -180,6 +180,7 @@ def on_request(ch, method, props, body):
     response = get_product_info(url, driver)
     if not response:
         response = 1
+        
     ch.basic_publish(
         exchange="",
         routing_key=props.reply_to,
@@ -190,7 +191,7 @@ def on_request(ch, method, props, body):
 
 
 def main():
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq"))
 
     channel = connection.channel()
 
@@ -205,9 +206,9 @@ def main():
 
 if __name__ == "__main__":
     try:
-        #display = Display(visible=True)  # to comment for windows
-        #display.start()  # to comment for windows
+        display = Display(visible=False)  # to comment for windows
+        display.start()  # to comment for windows
         main()
     except KeyboardInterrupt:
-        #display.stop()  # to comment for windows
+        display.stop()  # to comment for windows
         print("Interrupted")

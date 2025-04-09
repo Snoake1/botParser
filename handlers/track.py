@@ -73,8 +73,7 @@ async def show_tracked_items(message: Message):
     if products:
         for prod in products:
             await message.answer(
-                f"{prod.name}\n{prod.url}\nТекущая цена: {prod.cur_price}₽\n\
-                    Максимальная цена: {prod.max_price}₽\nМинимальная цена: {prod.min_price}₽",
+                f"{prod.name}\n{prod.url}\nТекущая цена: {prod.cur_price}₽\nМаксимальная цена: {prod.max_price}₽\nМинимальная цена: {prod.min_price}₽",
                 reply_markup=prod_keyboard,
             )
     else:

@@ -28,6 +28,54 @@ services:
     ports:
       - 8080:8080
 
+  ozon_parser:
+    build:
+      context: .  # Указываем директорию для сборки
+      dockerfile: ozon_consumer/Dockerfile      # Указываем Dockerfile внутри ozon_consumer
+    container_name: ozon_parser
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./ozon_consumer:/ozon_app
+    working_dir: /app
+    shm_size: 512m
+    restart: on-failure
+
+  wb_parser:
+    build:
+      context: .  # Указываем директорию для сборки
+      dockerfile: wb_consumer/Dockerfile    # Указываем Dockerfile внутри wb_consumer
+    container_name: wb_parser
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./wb_consumer:/wb_app
+    working_dir: /app
+    shm_size: 512m
+    restart: on-failure
+
+  find_parser:
+    build:
+      context: .  # Указываем директорию для сборки
+      dockerfile: find_consumer/Dockerfile    # Указываем Dockerfile внутри wb_consumer
+    container_name: find_parser
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./find_parser:/find_app
+    working_dir: /app
+    shm_size: 512m
+    restart: on-failure
+
   rabbitmq:
     image: rabbitmq:4.0-management  # Используемый образ
     container_name: rabbitmq        # Имя контейнера
@@ -35,14 +83,24 @@ services:
       - "5672:5672"                 # Порт для AMQP протокола
       - "15672:15672"              # Порт для веб-интерфейса управления
     restart: unless-stopped         # Опционально: перезапуск контейнера, если он остановился
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   redis:
     image: redis:latest
     container_name: redis_db
-    restart: always
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   redis_data:  

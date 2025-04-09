@@ -31,34 +31,45 @@ except ImportError:
     display = None
 
 
-class OzonConsumer:
-    """consumer для обработки поиска похожих товаров на страницах озон"""
+class WbConsumer:
     def __init__(self):
         self.driver = None
-        self.port = 9222  # Уникальный порт для Ozon
+        self.port = 9223
+        self.max_init_retries = 3
         self._ensure_driver()
 
-
     def _init_driver(self):
-        """Инициализация драйвера с уникальным портом."""
-        options = webdriver.ChromeOptions()
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument(
-            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)\
-                AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        )
-        options.add_argument(f"--remote-debugging-port={self.port}")
-        try:
-            driver = uc.Chrome(
-                options=options, version_main=133, delay=random.randint(1, 3)
-            )
-            logger.info("Ozon driver initialized successfully on port %s", self.port)
-            return driver
-        except Exception as e:
-            logger.error("Failed to initialize Ozon driver on port %s: %s", self.port, e)
-            return None
-
+        """Инициализация драйвера с уникальным портом и повторными попытками."""
+        for attempt in range(self.max_init_retries):
+            try:
+                options = webdriver.ChromeOptions()
+                options.add_argument("--no-sandbox")
+                options.add_argument("--disable-blink-features=AutomationControlled")
+                options.add_argument(
+                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)\
+                        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                )
+                options.add_argument(f"--remote-debugging-port={self.port}")
+                options.add_argument("--headless")
+                options.add_argument("--disable-gpu")
+                driver = uc.Chrome(
+                    options=options, version_main=135, delay=random.randint(1, 3)
+                )
+                logger.info("WB driver initialized successfully on port %s", self.port)
+                return driver
+            except Exception as e:
+                logger.error(
+                    "Failed to initialize WB driver on port\
+                        %s, attempt %s/%s: %s", self.port, attempt+1,
+                        self.max_init_retries, e
+                )
+                if attempt < self.max_init_retries - 1:
+                    time.sleep(5)
+                else:
+                    logger.critical(
+                        "Max retries exceeded for driver initialization. Exiting."
+                    )
+                    raise
 
     def _ensure_driver(self):
         """Проверка и перезапуск драйвера, если он не работает."""
@@ -66,7 +77,6 @@ class OzonConsumer:
             if self.driver:
                 self.driver.quit()
             self.driver = self._init_driver()
-
 
     def _is_driver_alive(self):
         """Проверка, работает ли драйвер."""
@@ -82,11 +92,10 @@ class OzonConsumer:
             logger.warning("Driver is not responding")
             return False
 
-
-    def get_pages_ozon(
+    def get_pages_wb(
         self, product: Product, cost_range: str, exact_match: bool
     ) -> dict:
-        """Синхронная функция парсинга Ozon с переиспользуемым драйвером."""
+        """Синхронная функция парсинга Wildberries с переиспользуемым драйвером."""
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -96,21 +105,23 @@ class OzonConsumer:
                 else:
                     name = product.name
 
+                if name == "":
+                    logger.info("Product name is empty")
+                    return {}
+
                 if cost_range == "Не установлен":
                     formatted_range = ""
                 else:
                     borders = cost_range.split()
-                    formatted_range = (
-                        f"currency_price={borders[0]}.000%3B{borders[1]}.000&"
-                    )
+                    formatted_range = f"&priceU={borders[0]}00%3B{borders[1]}00"
 
-                url = f"https://www.ozon.ru/search/?{formatted_range}\
-                    from_global=true&sorting=score&text={name.replace(' ', '+')}"
+                url = f"https://www.wildberries.ru/catalog/0/search.aspx?\
+                    sort=popular&search={name.replace(' ', '+')}{formatted_range}"
                 logger.info(
-                    "Fetching URL (attempt %s/%s: %s", attempt + 1, max_retries, url
+                    "Fetching URL (attempt %s/%s): %s", attempt+1, max_retries, url
                 )
                 self.driver.get(url)
-                time.sleep(random.uniform(3, 6))
+                time.sleep(random.uniform(4, 7))  # Увеличенное время ожидания
 
                 page_source = self.driver.page_source
                 if not page_source or len(page_source) < 100:
@@ -121,33 +132,31 @@ class OzonConsumer:
 
                 logger.debug("Page source length: %s", len(page_source))
                 soup = BeautifulSoup(page_source, "html.parser")
-                if soup.find(string="Доступ ограничен") is not None:
-                    logger.warning("Access restricted, refreshing page")
-                    self.driver.refresh()
-                    time.sleep(2)
-                    soup = BeautifulSoup(self.driver.page_source, "html.parser")
-
-                if soup.find("div", class_="aa0g_33") is not None:
-                    logger.info("No results found on page")
-                    return {}
-
-                tiles = soup.find_all("div", class_=re.compile(".*tile-root.*"))
+                tiles = soup.find_all(
+                    "div", class_=re.compile(".*product-card__wrapper*")
+                )
                 if not tiles:
                     logger.warning("No tiles found on page")
                     return {}
 
                 pages_with_price = {}
-                for tile in tiles:
+                for tile in tiles[:10]:
                     link = tile.find("a")
                     if link and "href" in link.attrs:
                         link = link["href"]
                         price = tile.find(
-                            "span", class_=re.compile(".*tsHeadline500Medium.*")
+                            "ins", class_=re.compile(".*price__lower-price.*")
                         )
                         if price:
-                            pages_with_price["https://www.ozon.ru" + link] = (
-                                price.text.replace("\u2009", "")
-                            )
+                            if cost_range == "Не установлен":
+                                pages_with_price[link] = price.text.replace("\xa0", "")
+                                continue
+                            cost_as_list = list(map(int, cost_range.split()))
+                            print(cost_as_list)
+                            if int(price.text.replace("\xa0", "")[:-1]) in range(
+                                cost_as_list[0], cost_as_list[1]
+                            ):
+                                pages_with_price[link] = price.text.replace("\xa0", "")
                         else:
                             logger.debug("No price found for tile: %s", tile)
 
@@ -161,33 +170,30 @@ class OzonConsumer:
                 RemoteDisconnected,
             ) as e:
                 logger.error(
-                    "WebDriver connection error on attempt %(attempt)s: %(e)s"
+                    "WebDriver connection error on attempt %s: %s", attempt+1, e
                 )
                 if attempt < max_retries - 1:
                     logger.info("Retrying...")
                     self.driver.quit()
                     self.driver = self._init_driver()
-                    time.sleep(1)
+                    time.sleep(2)
                 else:
                     logger.error("Max retries exceeded. Returning empty result.")
                     return {}
             except Exception as e:
                 logger.error(
-                    "Unexpected error during parsing on attempt %(attempt)s: %(e)s"
+                    "Unexpected error during parsing on attempt %s: %s", attempt+1, e
                 )
                 if attempt < max_retries - 1:
                     logger.info("Retrying due to unexpected error...")
                     self.driver.quit()
                     self.driver = self._init_driver()
-                    time.sleep(1)
+                    time.sleep(2)
                 else:
                     logger.error(
                         "Max retries exceeded for unexpected error. Returning empty result."
                     )
                     return {}
-            except KeyboardInterrupt:
-                break
-
 
     async def process_message(
         self, message: aio_pika.IncomingMessage, channel: aio_pika.Channel
@@ -196,12 +202,12 @@ class OzonConsumer:
         async with message.process():
             try:
                 data_json = message.body.decode()
-                logger.info("Received data: %(data_json)s")
+                logger.info("Received data: %s", data_json)
                 product, cost_range, exact_match = Data.from_json(data_json)
 
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(
-                    None, self.get_pages_ozon, product, cost_range, exact_match
+                    None, self.get_pages_wb, product, cost_range, exact_match
                 )
 
                 await channel.default_exchange.publish(
@@ -212,7 +218,7 @@ class OzonConsumer:
                     ),
                     routing_key=message.reply_to,
                 )
-                logger.info("Sent response: %(response)s")
+                logger.info("Sent response: %s", response)
             except Exception as e:
                 logger.error("Error processing message: %s", e)
                 await channel.default_exchange.publish(
@@ -229,21 +235,19 @@ class OzonConsumer:
         while True:
             try:
                 connection = await aio_pika.connect_robust(
-                    "amqp://guest:guest@localhost/"
+                    "amqp://guest:guest@rabbitmq/"
                 )
                 async with connection:
                     channel = await connection.channel()
-                    queue = await channel.declare_queue("ozon_answer")
+                    queue = await channel.declare_queue("wb_answer")
                     await channel.set_qos(prefetch_count=1)
 
-                    logger.info("Awaiting RPC requests for ozon_answer")
+                    logger.info("Awaiting RPC requests for wb_answer")
                     await queue.consume(lambda msg: self.process_message(msg, channel))
                     await asyncio.Future()
             except Exception as e:
-                logger.error(
-                    "Ozon_consumer crashed: %s. Reconnecting in 1 seconds...", e
-                )
-                await asyncio.sleep(1)
+                logger.error("Wb_consumer crashed: %s. Reconnecting in 5 seconds...", e)
+                await asyncio.sleep(5)
             finally:
                 if self.driver:
                     self.driver.quit()
@@ -251,7 +255,7 @@ class OzonConsumer:
 
 if __name__ == "__main__":
     try:
-        consumer = OzonConsumer()
+        consumer = WbConsumer()
         asyncio.run(consumer.run())
     except KeyboardInterrupt:
         if display:
