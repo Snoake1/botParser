@@ -33,7 +33,7 @@ COPY ../requirements_for_consumers.txt .
 RUN pip install --no-cache-dir -r requirements_for_consumers.txt
 
 # Копирование исходного кода
-COPY product.py data.py ozon_consumer/ozon_consumer.py ./
+COPY product.py ozon_consumer/ozon_consumer.py ./
 
 # Команда запуска
 CMD ["python3", "ozon_consumer.py"]

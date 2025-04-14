@@ -6,7 +6,7 @@ from aiogram.types import (
 )
 from handlers.start import default_keyboard
 from db_handler.models import User
-from db_handler.db_class import (
+from db_handler.db_handlers import (
     insert_data,
     get_user_products,
     is_product_already_in_db,
@@ -97,7 +97,7 @@ async def del_product(callback: Message):
 
 
 @track_router.callback_query(F.data == "add_product")
-async def get_item_for_track(callback: Message):
+async def set_item_for_track(callback: Message):
     """Обработчик добавления товара"""
     url = callback.message.text
     user_id = callback.from_user.id

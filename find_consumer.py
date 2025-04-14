@@ -107,12 +107,17 @@ def parse_page_ozon(url: str, driver) -> Product:
 def parse_page_wildberries(url: str, driver) -> Product:
     """Парсинг страницы wb"""
     driver.get(url=url)
-    time.sleep(random.randint(3, 5))
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-
-    name = soup.find("h1", class_=re.compile(".*product-page__title.*"))
-    if name is None:
-        return None
+    attempt = 1
+    name = None
+    
+    while name is None:
+        time.sleep(1)
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        name = soup.find("h1", class_=re.compile(".*product-page__title.*"))
+        attempt += 1
+        
+        if attempt == 10:
+            return None
     name = name.text
 
     price = soup.find("ins", class_=re.compile(".*price-block__final-price.*"))
@@ -152,7 +157,7 @@ def parse_page_wildberries(url: str, driver) -> Product:
             )
             value = row.find("td").text.strip()
             specifications[key] = value
-
+            
     return Product(
         name,
         price,
@@ -166,9 +171,10 @@ def parse_page_wildberries(url: str, driver) -> Product:
 def get_product_info(url: str, driver) -> Product | str:
     """Получение информации о товаре"""
     product = parse(url, driver)
+    
     if isinstance(product, str):
         return product
-    return product.to_json() if not product else None
+    return product.to_json() if product else None
 
 
 def on_request(ch, method, props, body):
@@ -205,9 +211,9 @@ def main():
 
 if __name__ == "__main__":
     try:
-        #display = Display(visible=True)  # to comment for windows
-        #display.start()  # to comment for windows
+        display = Display(visible=True)  # to comment for windows
+        display.start()  # to comment for windows
         main()
     except KeyboardInterrupt:
-        #display.stop()  # to comment for windows
+        display.stop()  # to comment for windows
         print("Interrupted")

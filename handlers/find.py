@@ -14,7 +14,7 @@ from aiogram.fsm.context import FSMContext
 from handlers.start import default_keyboard, get_url
 from create_bot import bot
 from producer import find_cheaper_products
-from db_handler.db_class import get_same_prod_from_db
+from db_handler.db_handlers import get_same_prod_from_db
 
 find_router = Router()
 
@@ -84,7 +84,7 @@ async def get_text(exact_match: bool = False, cost_range: str = "Не устан
 
 
 @find_router.callback_query(F.data == "find_cheaper")
-async def process_url(callback: Message, state: FSMContext):
+async def set_params_for_url(callback: Message, state: FSMContext):
     """ОБработка сообщения с url адрессом"""
     url = await get_url(callback.message.text)
     await callback.message.delete()
@@ -93,14 +93,6 @@ async def process_url(callback: Message, state: FSMContext):
     )
 
     await callback.message.answer(await get_text(), reply_markup=get_keyboard())
-
-
-# @find_router.message(Mode.find_mode)
-# async def process_text(message: Message, state: FSMContext):
-#     await message.answer(f'Не могу перейти по ссылке.\n\n'
-#                          f'Отправь ссылку на товар, и я постараюсь найти аналоги дешевле✨\n\n'
-#                          f'Доступные сайты:\n'
-#                          f'{"\n".join(valid_names)}', reply_markup=default_keyboard)
 
 
 @find_router.callback_query(F.data == "cost_range")
@@ -173,7 +165,7 @@ async def process_exact_match(message: Message, state: FSMContext):
 
 
 @find_router.callback_query(F.data == "find")
-async def get_finding_params(callback: Message, state: FSMContext):
+async def find_same_productss(callback: Message, state: FSMContext):
     """Обработка кнопки "Начать поиск"""
     data = await state.get_data()
     url = data.get("url")
@@ -212,8 +204,8 @@ async def get_finding_params(callback: Message, state: FSMContext):
             await callback.message.answer(
                 f"Цена: {price}\nМаркетплейс: {market}\n{link}"
             )
-    await bot.send_message(
-        callback.from_user.id,
-        "Это самые дешевые товары, что удалось найти",
-        reply_markup=default_keyboard,
-    )
+        await bot.send_message(
+            callback.from_user.id,
+            "Это самые дешевые товары, что удалось найти",
+            reply_markup=default_keyboard,
+        )

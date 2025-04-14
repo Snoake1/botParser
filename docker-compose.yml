@@ -71,7 +71,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./find_parser:/find_app
+      - ./find_consumer:/find_app
     working_dir: /app
     shm_size: 512m
     restart: on-failure

@@ -33,7 +33,7 @@ COPY ../requirements_for_consumers.txt .
 RUN pip install --no-cache-dir -r requirements_for_consumers.txt
 
 # Копирование исходного кода
-COPY product.py data.py wb_consumer/wb_consumer.py ./
+COPY product.py wb_consumer/wb_consumer.py ./
 
 # Команда запуска
 CMD ["python3", "wb_consumer.py"]

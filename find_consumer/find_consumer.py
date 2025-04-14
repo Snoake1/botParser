@@ -9,6 +9,7 @@ import pika
 from product import Product
 
 
+
 def get_driver():
     """Получние драйвера"""
     options = webdriver.ChromeOptions()
@@ -21,32 +22,32 @@ def get_driver():
         AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15")
 
     driver = uc.Chrome(options=options, version_main=135, delay=random.randint(1, 3))
-    # driver.get("https://www.browserscan.net/ru/bot-detection")
-    # time.sleep(10)
-    # driver.get("https://nowsecure.nl")
-    # time.sleep(10)
     return driver
 
 
-def parse(url, driver) -> Product | str:
+def parse(url, driver) -> Product | str | None:
     """Выбор парсера"""
+    product = "Страницу не удалось распознать"
     if re.search(r".*ozon.ru.*", url):
-        return parse_page_ozon(url, driver)
+        product = parse_page_ozon(url, driver)
 
     if re.search(r".*wildberries.*", url):
-        return parse_page_wildberries(url, driver)
+        product = parse_page_wildberries(url, driver)
 
-    return "Страницу не удалось распознать"
+    if isinstance(product, str):
+        return product
+    
+    return product.to_json() if product != None else None
 
 
 def parse_page_ozon(url: str, driver) -> Product:
     """Парсинг страницы ozon"""
-    driver.get(url=url)
+    driver.get(url=url) # обращение к страницы
     time.sleep(random.randint(1, 3))
 
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+    soup = BeautifulSoup(driver.page_source, "html.parser") # Загрузка в bs4 для поиска
 
-    if soup.find(string="Доступ ограничен") is not None:
+    if soup.find(string="Доступ ограничен") is not None: # Обработка ограничения доступа
         time.sleep(10)
         driver.refresh()
         soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -107,12 +108,17 @@ def parse_page_ozon(url: str, driver) -> Product:
 def parse_page_wildberries(url: str, driver) -> Product:
     """Парсинг страницы wb"""
     driver.get(url=url)
-    time.sleep(random.randint(3, 5))
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-
-    name = soup.find("h1", class_=re.compile(".*product-page__title.*"))
-    if name is None:
-        return None
+    attempt = 1
+    name = None
+    
+    while name is None:
+        time.sleep(1)
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        name = soup.find("h1", class_=re.compile(".*product-page__title.*"))
+        attempt += 1
+        
+        if attempt == 10:
+            return None
     name = name.text
 
     price = soup.find("ins", class_=re.compile(".*price-block__final-price.*"))
@@ -163,42 +169,36 @@ def parse_page_wildberries(url: str, driver) -> Product:
     )
 
 
-def get_product_info(url: str, driver) -> Product | str:
-    """Получение информации о товаре"""
-    product = parse(url, driver)
-    if isinstance(product, str):
-        return product
-    return product.to_json() if product != None else None
-
 
 def on_request(ch, method, props, body):
-    """Обработчки запроса"""
+    """Обработчик запроса"""
     url = body.decode()
     driver = get_driver()
 
     print(f" [.] get url: ({url})")
-    response = get_product_info(url, driver)
-    if not response:
+    response = parse(url, driver)
+    print(f"[.] response: ({response})")
+    if not response: # Не удалось получить информацию
         response = 1
         
-    ch.basic_publish(
+    ch.basic_publish( # Публикация сообщения в очередь для обратных сообщений консьюмера
         exchange="",
         routing_key=props.reply_to,
         properties=pika.BasicProperties(correlation_id=props.correlation_id),
         body=str(response),
     )
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+    ch.basic_ack(delivery_tag=method.delivery_tag) # ожидание подтверждения доставки
 
 
 def main():
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq")) # подключение к RabbitMQ
 
     channel = connection.channel()
 
-    channel.queue_declare(queue="find_answer")
+    channel.queue_declare(queue="find_answer") # Объявление очереди
 
-    channel.basic_qos(prefetch_count=1)
-    channel.basic_consume(queue="find_answer", on_message_callback=on_request)
+    channel.basic_qos(prefetch_count=1) # Ограничение на 1 сообщение
+    channel.basic_consume(queue="find_answer", on_message_callback=on_request) # Назначение ообработчика
 
     print(" [x] Awaiting RPC requests")
     channel.start_consuming()
@@ -206,9 +206,9 @@ def main():
 
 if __name__ == "__main__":
     try:
-        display = Display(visible=False)  # to comment for windows
-        display.start()  # to comment for windows
+        display = Display(visible=False)  # comment for windows
+        display.start()  # comment for windows
         main()
     except KeyboardInterrupt:
-        display.stop()  # to comment for windows
+        display.stop()  # comment for windows
         print("Interrupted")

@@ -62,7 +62,9 @@ async def cmd_start(message: Message, state: FSMContext):
     """Команда запуска бота"""
     await state.clear()
     await message.answer(
-        "Помогу найти товар дешевле и отслеживать изменения цен ваших товаров",
+        "Помогу найти товар дешевле и отслеживать изменения цен ваших товаров.\n\
+        На данный момент я могу работать со следующими сайтами:\nOzon.ru\nWildberries.ru\n\
+        Для начала работы отправь ссылку на страницу товара",
         reply_markup=default_keyboard,
     )
 
@@ -72,7 +74,8 @@ async def cmd_hep(message: Message, state: FSMContext):
     """Помощь"""
     await state.clear()
     await message.answer(
-        'Запуск сообщения по команде /help используя фильтр Command("help")'
+        'Отправь ссылку на товар, который хочешь отслеживать или найти аналог дешевле\n\
+        Можешь посмотреть отслеживаемые товары при помощи втроенной клавиатуры'
     )
 
 
@@ -90,3 +93,10 @@ async def cancel(callback: Message, state: FSMContext):
     """Сброс состояний"""
     await callback.message.delete()
     await state.clear()
+    
+@start_router.message()
+async def process_text(message: Message):
+    await message.answer(f'Не могу перейти по ссылке.\n\n'
+                         f'Отправь ссылку на товар, и я постараюсь найти аналоги дешевле✨\n\n'
+                         f'Доступные сайты:\n'
+                         f'{"\n".join(valid_names)}', reply_markup=default_keyboard)
