@@ -5,3 +5,5 @@ venv
 .env
 .coverage
 tests/pages/
+.pylintrc
+test.py

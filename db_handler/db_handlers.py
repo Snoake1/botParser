@@ -144,7 +144,8 @@ async def get_same_prod_from_db(name, threshold=0.7, limit=10):
     """Функция получения похожих товаров из базы данных"""
     async with async_session() as session:
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT *, 
                        similarity(name, :name) as sim_score
                 FROM products 
@@ -152,8 +153,9 @@ async def get_same_prod_from_db(name, threshold=0.7, limit=10):
                 AND similarity(name, :name) > :threshold
                 ORDER BY sim_score DESC
                 LIMIT :limit
-            """),
-            {"name": name, "threshold": threshold, "limit": limit}
+            """
+            ),
+            {"name": name, "threshold": threshold, "limit": limit},
         )
         return result.mappings().all()
 

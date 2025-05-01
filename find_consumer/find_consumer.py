@@ -9,7 +9,6 @@ import pika
 from product import Product
 
 
-
 def get_driver():
     """Получние драйвера"""
     options = webdriver.ChromeOptions()
@@ -18,10 +17,13 @@ def get_driver():
     # options.add_argument(
     #    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)\
     #        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Safari/537.36")
-    options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)\
-        AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)\
+        AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15"
+    )
 
     driver = uc.Chrome(options=options, version_main=135, delay=random.randint(1, 3))
+    driver.get("https://xapi.ozon.ru")
     return driver
 
 
@@ -36,18 +38,20 @@ def parse(url, driver) -> Product | str | None:
 
     if isinstance(product, str):
         return product
-    
+
     return product.to_json() if product != None else None
 
 
 def parse_page_ozon(url: str, driver) -> Product:
     """Парсинг страницы ozon"""
-    driver.get(url=url) # обращение к страницы
+    driver.get(url=url)  # обращение к страницы
     time.sleep(random.randint(1, 3))
 
-    soup = BeautifulSoup(driver.page_source, "html.parser") # Загрузка в bs4 для поиска
+    soup = BeautifulSoup(driver.page_source, "html.parser")  # Загрузка в bs4 для поиска
 
-    if soup.find(string="Доступ ограничен") is not None: # Обработка ограничения доступа
+    if (
+        soup.find(string="Доступ ограничен") is not None
+    ):  # Обработка ограничения доступа
         time.sleep(10)
         driver.refresh()
         soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -110,13 +114,13 @@ def parse_page_wildberries(url: str, driver) -> Product:
     driver.get(url=url)
     attempt = 1
     name = None
-    
+
     while name is None:
         time.sleep(1)
         soup = BeautifulSoup(driver.page_source, "html.parser")
         name = soup.find("h1", class_=re.compile(".*product-page__title.*"))
         attempt += 1
-        
+
         if attempt == 10:
             return None
     name = name.text
@@ -169,7 +173,6 @@ def parse_page_wildberries(url: str, driver) -> Product:
     )
 
 
-
 def on_request(ch, method, props, body):
     """Обработчик запроса"""
     url = body.decode()
@@ -178,27 +181,31 @@ def on_request(ch, method, props, body):
     print(f" [.] get url: ({url})")
     response = parse(url, driver)
     print(f"[.] response: ({response})")
-    if not response: # Не удалось получить информацию
+    if not response:  # Не удалось получить информацию
         response = 1
-        
-    ch.basic_publish( # Публикация сообщения в очередь для обратных сообщений консьюмера
+
+    ch.basic_publish(  # Публикация сообщения в очередь для обратных сообщений консьюмера
         exchange="",
         routing_key=props.reply_to,
         properties=pika.BasicProperties(correlation_id=props.correlation_id),
         body=str(response),
     )
-    ch.basic_ack(delivery_tag=method.delivery_tag) # ожидание подтверждения доставки
+    ch.basic_ack(delivery_tag=method.delivery_tag)  # ожидание подтверждения доставки
 
 
 def main():
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq")) # подключение к RabbitMQ
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host="rabbitmq")
+    )  # подключение к RabbitMQ
 
     channel = connection.channel()
 
-    channel.queue_declare(queue="find_answer") # Объявление очереди
+    channel.queue_declare(queue="find_answer")  # Объявление очереди
 
-    channel.basic_qos(prefetch_count=1) # Ограничение на 1 сообщение
-    channel.basic_consume(queue="find_answer", on_message_callback=on_request) # Назначение ообработчика
+    channel.basic_qos(prefetch_count=1)  # Ограничение на 1 сообщение
+    channel.basic_consume(
+        queue="find_answer", on_message_callback=on_request
+    )  # Назначение ообработчика
 
     print(" [x] Awaiting RPC requests")
     channel.start_consuming()

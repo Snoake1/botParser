@@ -3,6 +3,7 @@ import asyncio
 import aio_pika
 from clients.find_client import rabbitmq_connection
 
+
 class AsyncOzonRpcClient:
     """Обмен данными с ozon consumer"""
 
@@ -31,7 +32,7 @@ class AsyncOzonRpcClient:
         if not hasattr(self, "channel"):
             await self.setup()
 
-        correlation_id = str(uuid.uuid4())
+        correlation_id = str(uuid.uuid4())  # Назначение id для ответа
         self.responses[correlation_id] = None
 
         await self.channel.default_exchange.publish(
@@ -43,6 +44,7 @@ class AsyncOzonRpcClient:
             routing_key="ozon_answer",
         )
 
+        # Ожидание ответа
         while self.responses[correlation_id] is None:
             await asyncio.sleep(0.1)
         response = self.responses.pop(correlation_id)

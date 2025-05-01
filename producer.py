@@ -1,33 +1,41 @@
 import json
 import asyncio
+import logging
 from typing import Dict, Union
 from product import Product
 from clients.find_client import AsyncFindRpcClient
 from clients.ozon_client import AsyncOzonRpcClient
 from clients.wb_client import AsyncWbRpcClient
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
+
 
 async def find_cheaper_products(
     url: str, cost_range: str, exact_match: bool
 ) -> Union[Dict[str, str], str]:
     """Асинхронная функция поиска более дешевых товаров."""
-    find_rpc = AsyncFindRpcClient()
+    find_rpc = AsyncFindRpcClient()  # Инициализация протоколов клиентов
     ozon_rpc = AsyncOzonRpcClient()
     wb_rpc = AsyncWbRpcClient()
 
-    print(f" [x] Requesting {url};\n {cost_range};\n {exact_match};\n")
+    logger.info(" [x] Requesting %s;\n %s;\n %s;", url, cost_range, exact_match)
     response = await find_rpc.call(url)
-    print(response.decode())
+    logger.info(" [x] Got data: %s", response.decode())
     if response.decode() == "1":
         return "1", "Ошибка при получении данных о товаре"
-        
+
     product = Product.from_json(response.decode())
-    print(f" [.] Got {product}")
-    
+    logger.info(" [x] Got %s", product)
+
     data = {
         "product": product.to_json(),
         "cost_range": cost_range,
-        "exact_match": exact_match
+        "exact_match": exact_match,
     }
     data = json.dumps(data)
     if isinstance(product, Product):
@@ -35,8 +43,8 @@ async def find_cheaper_products(
         wb_task = wb_rpc.call(data)
         ozon_response, wb_response = await asyncio.gather(ozon_task, wb_task)
 
-        print(f" [.] Got ozon {ozon_response}")
-        print(f" [.] Got wb {wb_response}")
+        logger.info(" [x] Got ozon: %s", ozon_response)
+        logger.info(" [x] Got wb: %s", wb_response)
 
         ret_dict = json.loads(ozon_response) | json.loads(wb_response)
         ret_dict = dict(sorted(ret_dict.items(), key=lambda x: int(x[1][:-1])))
@@ -50,7 +58,7 @@ async def get_prod(url):
     без поиска похожих товаров
     """
     find_rpc = AsyncFindRpcClient()
-    print(f" [x] Requesting just parse: {url};\n")
+    logger.info(" [x] Requesting just parse: %s;\n", url)
     response = await find_rpc.call(url)
     product = Product.from_json(response.decode())
     return product

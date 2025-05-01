@@ -22,6 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 class WbConsumer:
     def __init__(self):
         self.driver = None
@@ -31,7 +32,9 @@ class WbConsumer:
         self._setup_connection()
 
     def _setup_connection(self):
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq"))
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host="rabbitmq")
+        )
         self.channel = self.connection.channel()
         self.channel.queue_declare(queue="wb_answer")
         self.channel.basic_qos(prefetch_count=1)
@@ -47,17 +50,25 @@ class WbConsumer:
                 options.add_argument(f"--remote-debugging-port={self.port}")
                 options.add_argument("--headless")
                 options.add_argument("--disable-gpu")
-                driver = uc.Chrome(options=options, version_main=135, delay=random.randint(1, 3))
+                driver = uc.Chrome(
+                    options=options, version_main=135, delay=random.randint(1, 3)
+                )
                 logger.info("Driver initialized successfully")
                 return driver
             except Exception as e:
-                logger.error("Driver init failed (attempt %s/%s): %s", attempt+1, self.max_init_retries, e)
+                logger.error(
+                    "Driver init failed (attempt %s/%s): %s",
+                    attempt + 1,
+                    self.max_init_retries,
+                    e,
+                )
                 if attempt < self.max_init_retries - 1:
                     time.sleep(5)
                 else:
                     raise
 
     def _ensure_driver(self):
+        """Менеджер драйвера"""
         if self.driver is None or not self._is_driver_alive():
             if self.driver:
                 self.driver.quit()
@@ -67,10 +78,17 @@ class WbConsumer:
         try:
             _ = self.driver.current_url
             return True
-        except (WebDriverException, MaxRetryError, NewConnectionError, RemoteDisconnected):
+        except (
+            WebDriverException,
+            MaxRetryError,
+            NewConnectionError,
+            RemoteDisconnected,
+        ):
             return False
 
-    def get_pages_wb(self, product: Product, cost_range: str, exact_match: bool) -> dict:
+    def get_pages_wb(
+        self, product: Product, cost_range: str, exact_match: bool
+    ) -> dict:
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -84,14 +102,22 @@ class WbConsumer:
                     formatted_range = f"&priceU={borders[0]}00%3B{borders[1]}00"
 
                 url = f"https://www.wildberries.ru/catalog/0/search.aspx?sort=popular&search={name.replace(' ', '+')}{formatted_range}"
-                logger.info("Fetching: %s", url)
-                self.driver.get(url)
-                time.sleep(random.uniform(4, 7))
 
-                soup = BeautifulSoup(self.driver.page_source, "html.parser")
-                tiles = soup.find_all("div", class_=re.compile(".*product-card__wrapper*"))
-                if not tiles:
-                    return {}
+                logger.info("Fetching: %s", url)
+                attempt = 1
+                self.driver.get(url)
+
+                tiles = None
+
+                while not tiles:
+                    time.sleep(1)
+                    attempt += 1
+                    soup = BeautifulSoup(self.driver.page_source, "html.parser")
+                    tiles = soup.find_all(
+                        "div", class_=re.compile(".*product-card__wrapper*")
+                    )
+                    if attempt == 10:
+                        return {}
 
                 pages_with_price = {}
                 for tile in tiles[:10]:
@@ -99,7 +125,9 @@ class WbConsumer:
                     if not link or "href" not in link.attrs:
                         continue
                     href = link["href"]
-                    price = tile.find("ins", class_=re.compile(".*price__lower-price.*"))
+                    price = tile.find(
+                        "ins", class_=re.compile(".*price__lower-price.*")
+                    )
                     if not price:
                         continue
                     price_text = price.text.replace("\xa0", "").replace("₽", "")
@@ -116,7 +144,12 @@ class WbConsumer:
                             pages_with_price[href] = f"{price_int} ₽"
                 return pages_with_price
             except Exception as e:
-                logger.error("Error while parsing (attempt %s/%s): %s", attempt+1, max_retries, e)
+                logger.error(
+                    "Error while parsing (attempt %s/%s): %s",
+                    attempt + 1,
+                    max_retries,
+                    e,
+                )
                 if attempt < max_retries - 1:
                     time.sleep(2)
                     self.driver.quit()
@@ -128,7 +161,6 @@ class WbConsumer:
         try:
             data = json.loads(body)
             logger.info("Get data:  %s", data)
-            print(data["product"])
             product = Product.from_json(data["product"])
             cost_range = data.get("cost_range", "Не установлен")
             exact_match = data.get("exact_match", False)
@@ -137,12 +169,12 @@ class WbConsumer:
             response = self.get_pages_wb(product, cost_range, exact_match)
             response_json = json.dumps(response)
 
+            logger.info("Collected data: %s", response_json)
+
             ch.basic_publish(
                 exchange="",
                 routing_key=props.reply_to,
-                properties=pika.BasicProperties(
-                    correlation_id=props.correlation_id
-                ),
+                properties=pika.BasicProperties(correlation_id=props.correlation_id),
                 body=response_json,
             )
             logger.info("Sent response for correlation_id %s", props.correlation_id)
@@ -151,9 +183,7 @@ class WbConsumer:
             ch.basic_publish(
                 exchange="",
                 routing_key=props.reply_to,
-                properties=pika.BasicProperties(
-                    correlation_id=props.correlation_id
-                ),
+                properties=pika.BasicProperties(correlation_id=props.correlation_id),
                 body=json.dumps({}),
             )
         finally:
@@ -161,7 +191,9 @@ class WbConsumer:
 
     def run(self):
         logger.info("Starting WB consumer with pika")
-        self.channel.basic_consume(queue="wb_answer", on_message_callback=self._on_request)
+        self.channel.basic_consume(
+            queue="wb_answer", on_message_callback=self._on_request
+        )
         try:
             self.channel.start_consuming()
         except KeyboardInterrupt:

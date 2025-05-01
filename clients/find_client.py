@@ -1,6 +1,7 @@
 import uuid
 import asyncio
 import aio_pika
+import json
 
 
 async def rabbitmq_connection():
@@ -38,7 +39,7 @@ class AsyncFindRpcClient:
         if not hasattr(self, "channel"):
             await self.setup()
 
-        correlation_id = str(uuid.uuid4())
+        correlation_id = str(uuid.uuid4())  # Назначение id для ответа
         self.responses[correlation_id] = None
 
         await self.channel.default_exchange.publish(

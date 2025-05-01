@@ -9,6 +9,7 @@ class Base(DeclarativeBase):
 
 class User(Base):
     """Модель пользователя"""
+
     __tablename__ = "users"
 
     user_id = Column(Integer, primary_key=True, autoincrement=False)
@@ -23,6 +24,7 @@ class User(Base):
 # Модель Products
 class Product(Base):
     """Модель товара"""
+
     __tablename__ = "products"
 
     product_id = Column(Integer, primary_key=True, autoincrement=True)

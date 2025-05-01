@@ -21,9 +21,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 class OzonConsumer:
     """consumer для обработки поиска похожих товаров на страницах озон"""
-    
+
     def __init__(self):
         self.max_retries = 3
         self.driver = None
@@ -44,16 +45,21 @@ class OzonConsumer:
         # )
         # options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)\
         # AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15")
-        options.add_argument("user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 6_0 like Mac OS X)\
-            AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5376e Safari/8536.25")
+        options.add_argument(
+            "user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 6_0 like Mac OS X)\
+            AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5376e Safari/8536.25"
+        )
         try:
             driver = uc.Chrome(
                 options=options, version_main=135, delay=random.randint(1, 3)
             )
             logger.info("Ozon driver initialized successfully on port %s", self.port)
+            driver.get("https://xapi.ozon.ru")
             return driver
         except Exception as e:
-            logger.error("Failed to initialize Ozon driver on port %s: %s", self.port, e)
+            logger.error(
+                "Failed to initialize Ozon driver on port %s: %s", self.port, e
+            )
             return None
 
     def _ensure_driver(self):
@@ -84,17 +90,27 @@ class OzonConsumer:
                 formatted_range = ""
                 if cost_range != "Не установлен":
                     borders = cost_range.split()
-                    formatted_range = f"currency_price={borders[0]}.000%3B{borders[1]}.000&"
+                    formatted_range = (
+                        f"currency_price={borders[0]}.000%3B{borders[1]}.000&"
+                    )
 
                 url = f"https://www.ozon.ru/search/?{formatted_range}from_global=true&sorting=score&text={name.replace(' ', '+')}"
-                logger.info("Fetching URL (attempt %s/%s): %s", attempt + 1, self.max_retries, url)
+                logger.info(
+                    "Fetching URL (attempt %s/%s): %s",
+                    attempt + 1,
+                    self.max_retries,
+                    url,
+                )
 
                 self.driver.get(url)
                 time.sleep(random.uniform(3, 6))
 
                 page_source = self.driver.page_source
                 if not page_source or len(page_source) < 100:
-                    logger.warning("Page source is empty or too short (length: %s)", len(page_source))
+                    logger.warning(
+                        "Page source is empty or too short (length: %s)",
+                        len(page_source),
+                    )
                     raise WebDriverException("Empty page source")
 
                 soup = BeautifulSoup(page_source, "html.parser")
@@ -117,9 +133,13 @@ class OzonConsumer:
                 for tile in tiles:
                     link = tile.find("a")
                     if link and "href" in link.attrs:
-                        price = tile.find("span", class_=re.compile(".*tsHeadline500Medium.*"))
+                        price = tile.find(
+                            "span", class_=re.compile(".*tsHeadline500Medium.*")
+                        )
                         if price:
-                            pages_with_price["https://www.ozon.ru" + link["href"]] = price.text.replace("\u2009", "")
+                            pages_with_price["https://www.ozon.ru" + link["href"]] = (
+                                price.text.replace("\u2009", "")
+                            )
                         else:
                             logger.debug("No price found for tile: %s", tile)
 
@@ -142,14 +162,18 @@ class OzonConsumer:
                     logger.error("Max retries exceeded. Returning empty result.")
                     return {}
             except Exception as e:
-                logger.error("Unexpected error during parsing on attempt %s: %s", attempt, e)
+                logger.error(
+                    "Unexpected error during parsing on attempt %s: %s", attempt, e
+                )
                 if attempt < self.max_retries - 1:
                     logger.info("Retrying due to unexpected error...")
                     self.driver.quit()
                     self.driver = self._init_driver()
                     time.sleep(1)
                 else:
-                    logger.error("Max retries exceeded for unexpected error. Returning empty result.")
+                    logger.error(
+                        "Max retries exceeded for unexpected error. Returning empty result."
+                    )
                     return {}
 
     def on_message(self, ch, method, properties, body):
@@ -157,9 +181,11 @@ class OzonConsumer:
             data_json = json.loads(body)
             logger.info("Received data: %s", data_json)
             product = Product.from_json(data_json["product"])
-            cost_range, exact_match  = data_json["cost_range"], data_json["exact_match"]
+            cost_range, exact_match = data_json["cost_range"], data_json["exact_match"]
 
             response = self.get_pages_ozon(product, cost_range, exact_match)
+            response_json = json.dumps(response)
+            logger.info("Collected data: %s", response_json)
 
             ch.basic_publish(
                 exchange="",
@@ -167,9 +193,11 @@ class OzonConsumer:
                 properties=pika.BasicProperties(
                     correlation_id=properties.correlation_id
                 ),
-                body=json.dumps(response).encode()
+                body=response_json,
             )
-            logger.info("Sent response with correlation_id %s", properties.correlation_id)
+            logger.info(
+                "Sent response with correlation_id %s", properties.correlation_id
+            )
         except Exception as e:
             logger.error("Error processing message: %s", e)
             ch.basic_publish(
@@ -178,13 +206,15 @@ class OzonConsumer:
                 properties=pika.BasicProperties(
                     correlation_id=properties.correlation_id
                 ),
-                body=json.dumps({}).encode()
+                body=json.dumps({}).encode(),
             )
 
     def run(self):
         try:
             self.channel.basic_qos(prefetch_count=1)
-            self.channel.basic_consume(queue="ozon_answer", on_message_callback=self.on_message, auto_ack=True)
+            self.channel.basic_consume(
+                queue="ozon_answer", on_message_callback=self.on_message, auto_ack=True
+            )
             logger.info("Awaiting RPC requests for ozon_answer")
             self.channel.start_consuming()
         except KeyboardInterrupt:

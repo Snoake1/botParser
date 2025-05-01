@@ -58,9 +58,7 @@ async def send_update_price_message():
                 sticker = "📉"
                 txt = "уменьшилась на"
                 min_price = new_prod.price_with_card
-            text = f"{sticker}{db_prod.name}\n{db_prod.url}\nЦена на товар {txt} {diff}₽\n\
-                Текущая цена:{new_prod.price_with_card}0₽\n\
-                Максимальная цена:{max_price}₽\nМинимальная цена:{min_price}₽"
+            text = f"{sticker}{db_prod.name}\n{db_prod.url}\nЦена на товар {txt} {diff}₽\nТекущая цена:{new_prod.price_with_card}0₽\nМаксимальная цена:{max_price}₽\nМинимальная цена:{min_price}₽"
             await bot.send_message(db_prod.user_id, text, reply_markup=prod_keyboard)
     return
 
